@@ -5,7 +5,8 @@ from app.handlers.errors.user_exception_handlers import (
     UserNotFoundError,
     UserAlreadyExistsError,
     InvalidUserDataError,
-    FailUserCreationError
+    FailureUserCreationError,
+    FailureUserDeletionError
 )
 
 
@@ -67,5 +68,19 @@ class UserService:
         logger.info("User creation response from LDAP:", response=response)
         if response.get('result', 1) != 0:
             logger.error("Failed to create user in LDAP:", response=response)
-            raise FailUserCreationError("Failed to create user in LDAP.", details=str(response))
+            raise FailureUserCreationError("Failed to create user in LDAP.", details=str(response))
         return response
+
+    async def delete_user(self, user_mail: str):
+        logger.info("Deleting user from LDAP:", user_mail=user_mail)
+        check_email = await self.ldap_port.get_user_by_attribute("mail", f"{user_mail}")
+        logger.info("Mail existence check result:", exists=check_email, mail=user_mail)
+        
+        if not check_email:
+            logger.info("Email does not exist. User not found for deletion.")
+            raise UserNotFoundError(user_mail)
+        deleted = await self.ldap_port.delete_user(user_mail)
+        
+        if not deleted:
+            logger.error("Failed to delete user in LDAP:", mail=user_mail)
+            raise FailureUserDeletionError("Failed to delete user in LDAP.")

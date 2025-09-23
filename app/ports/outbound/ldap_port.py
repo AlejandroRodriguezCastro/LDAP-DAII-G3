@@ -112,6 +112,23 @@ class LDAPPort:
             entry = result
         return entry is not None
     
+    async def delete_user(self, user_mail: str):
+        logger.info("LDAPPort: Deleting user by mail", mail=user_mail)
+        self.ldap_controller.connect()
+        base_dn = "dc=ldap,dc=com" 
+        search_filter = f"(mail={user_mail})"
+        result = self.ldap_controller.search(base_dn, search_filter, scope="SUBTREE")
+        if isinstance(result, tuple):
+            result = result[0]
+        if isinstance(result, list) and result:
+            dn = result[0].entry_dn
+            self.ldap_controller.delete_entry(dn)
+            logger.info("User deleted:", dn=dn)
+        else:
+            logger.info("User not found for deletion:", mail=user_mail)
+        self.ldap_controller.disconnect()
+        return True
+        
     async def get_orgs(self):
         pass
     

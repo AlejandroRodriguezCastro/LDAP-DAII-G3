@@ -53,3 +53,10 @@ async def create_user(user: User):
     user_service = UserService(ldap_port_instance)
     created_user = await user_service.create_user(user)
     return created_user
+
+@router.delete("/{user_mail}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(user_mail: str):
+    logger.info("Received request to delete user:", user_mail=user_mail)
+    ldap_port_instance = await get_ldap_port_instance()
+    user_service = UserService(ldap_port_instance)
+    await user_service.delete_user(user_mail)
