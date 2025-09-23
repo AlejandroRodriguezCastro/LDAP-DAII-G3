@@ -1,0 +1,20 @@
+# Create Policies container
+dn: ou=Policies,dc=ldap,dc=com
+objectClass: organizationalUnit
+ou: Policies
+
+# Create default password policy
+dn: cn=default,ou=Policies,dc=ldap,dc=com
+objectClass: pwdPolicy
+objectClass: person
+cn: default
+sn: default
+pwdAttribute: userPassword
+pwdMaxFailure: 3
+pwdLockout: TRUE
+pwdLockoutDuration: 900
+pwdFailureCountInterval: 0
+pwdAllowUserChange: TRUE
+pwdMinLength: 8
+pwdInHistory: 5
+pwdCheckQuality: 1

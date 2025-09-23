@@ -1,0 +1,80 @@
+services:
+  openldap:
+    image: my-openldap:1.5.0
+    container_name: openldap
+    environment:
+      - LDAP_ORGANISATION=${LDAP_ORGANISATION}
+      - LDAP_DOMAIN=${LDAP_DOMAIN}
+      - LDAP_ADMIN_PASSWORD=${LDAP_ADMIN_PASSWORD}
+      - LDAP_CONFIG_PASSWORD=${LDAP_CONFIG_PASSWORD}
+      - LDAP_BASE_DN=${LDAP_BASE_DN}
+      - LDAP_TLS=false
+      - LDAP_LOG_LEVEL=256
+      - CONTAINER_LOG_LEVEL=debug
+    ports:
+      - "389:389"
+      - "636:636"
+    volumes:
+      - ldap-data:/var/lib/ldap
+      - ldap-config:/etc/ldap/slapd.d
+    command: --copy-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost:389", "-D", "cn=admin,dc=ldap,dc=com", "-w", "${LDAP_ADMIN_PASSWORD}", "-b", "dc=ldap,dc=com", "-s", "base"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  phpldapadmin:
+    image: osixia/phpldapadmin:0.9.0
+    container_name: phpldapadmin
+    environment:
+      - PHPLDAPADMIN_LDAP_HOSTS=openldap
+      - PHPLDAPADMIN_HTTPS=false
+      - PHPLDAPADMIN_LDAP_CLIENT_TLS=false
+    ports:
+      - "8080:80"
+    depends_on:
+      openldap:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  ldap-data:
+  ldap-config:
+  # - ./ldap-data:/var/lib/ldap
+  # - ./ldap-config:/etc/ldap/slapd.d
+
+
+# version: '3.8'
+
+# services:
+#   openldap:
+#     image: osixia/openldap:1.5.0
+#     container_name: openldap
+#     environment:
+#       - LDAP_ORGANISATION=${LDAP_ORGANISATION}
+#       - LDAP_DOMAIN=${LDAP_DOMAIN}
+#       - LDAP_ADMIN_PASSWORD=${LDAP_ADMIN_PASSWORD}
+#       - LDAP_TLS=false
+#     ports:
+#       - "389:389"
+#       - "636:636"
+#     volumes:
+#       - ./bootstrap/ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom
+#     command: --copy-service
+#     restart: unless-stopped
+
+#   phpldapadmin:
+#     image: osixia/phpldapadmin:0.9.0
+#     container_name: phpldapadmin
+#     environment:
+#       - PHPLDAPADMIN_LDAP_HOSTS=openldap
+#       - PHPLDAPADMIN_HTTPS=false
+#       - PHPLDAPADMIN_LDAP_CLIENT_TLS=false
+#     ports:
+#       - "8080:80"
+#     depends_on:
+#       - openldap
+#     restart: unless-stopped

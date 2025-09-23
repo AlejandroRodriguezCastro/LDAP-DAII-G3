@@ -1,0 +1,4 @@
+# create_people.ldif
+dn: ou=People,dc=ldap,dc=com
+objectClass: organizationalUnit
+ou: People

@@ -1,0 +1,24 @@
+# --------------------------------------------------
+# Create the 'people' Organizational Unit
+# --------------------------------------------------
+dn: ou=people,dc=mycompany,dc=com
+objectClass: organizationalUnit
+ou: people
+
+# --------------------------------------------------
+# Create a test user: John Doe
+# --------------------------------------------------
+dn: uid=jdoe,ou=people,dc=mycompany,dc=com
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+cn: John Doe
+sn: Doe
+givenName: John
+uid: jdoe
+uidNumber: 5000
+gidNumber: 5000
+homeDirectory: /home/jdoe
+loginShell: /bin/bash
+# The initial password for the user is 'Password123'
+userPassword: {SSHA}your_ssha_password_hash_here

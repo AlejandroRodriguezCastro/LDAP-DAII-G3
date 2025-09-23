@@ -1,0 +1,5 @@
+# Load ppolicy schema into cn=config
+dn: cn=ppolicy,cn=schema,cn=config
+objectClass: olcSchemaConfig
+cn: ppolicy
+include: file:///etc/ldap/schema/ppolicy.ldif

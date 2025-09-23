@@ -1,0 +1,33 @@
+version: '2'
+
+networks:
+  my-network:
+    driver: bridge
+services:
+  openldap:
+    image: bitnami/openldap:latest
+    ports:
+      - 389:389
+      - 636:636
+    environment:
+      # - LDAP_ORGANISATION=${LDAP_ORGANISATION}
+      # - LDAP_DOMAIN=${LDAP_DOMAIN}
+      - LDAP_ADMIN_PASSWORD=${LDAP_ADMIN_PASSWORD}
+      # - LDAP_CONFIG_PASSWORD=${LDAP_CONFIG_PASSWORD}
+      - LDAP_ROOT=${LDAP_ROOT}
+      - LDAP_ADMIN_USERNAME=admin
+      - LDAP_USERS=user01,user02
+      - LDAP_PASSWORDS=password1,password2
+      - LDAP_CONFIGURE_PPOLICY=yes
+    networks:
+      - my-network
+    volumes:
+      - openldap_data:/bitnami/openldap
+      - ./bootstrap/ldif/ppolicy.ldif:/container/service/slapd/assets/config/bootstrap/ldif/ppolicy.ldif:ro
+  # myapp:
+  #   image: YOUR_APPLICATION_IMAGE
+  #   networks:
+  #     - my-network
+volumes:
+  openldap_data:
+    driver: local

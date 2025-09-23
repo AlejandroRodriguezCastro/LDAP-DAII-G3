@@ -1,0 +1,23 @@
+dn: ou=Policies,dc=ldap,dc=com
+objectClass: organizationalUnit
+ou: Policies
+
+dn: cn=default,ou=Policies,dc=ldap,dc=com
+objectClass: top
+objectClass: device
+objectClass: pwdPolicy
+cn: default
+pwdAttribute: userPassword
+pwdMinAge: 0
+pwdMaxAge: 0
+pwdInHistory: 5
+pwdCheckQuality: 1
+pwdMinLength: 8
+pwdMaxFailure: 3
+pwdLockout: TRUE
+pwdLockoutDuration: 300
+pwdGraceAuthNLimit: 3
+pwdFailureCountInterval: 300
+pwdMustChange: TRUE
+pwdAllowUserChange: TRUE
+pwdSafeModify: TRUE

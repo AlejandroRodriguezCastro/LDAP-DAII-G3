@@ -1,0 +1,23 @@
+# Create ou=People if it doesn't exist
+dn: ou=People,dc=ldap,dc=com
+changetype: add
+objectClass: organizationalUnit
+ou: People
+
+# Add test user
+dn: uid=testuser,ou=People,dc=ldap,dc=com
+changetype: add
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: top
+cn: Test User
+sn: User
+uid: testuser
+uidNumber: 10000
+gidNumber: 10000
+homeDirectory: /home/testuser
+loginShell: /bin/bash
+mail: testuser@ldap.com
+telephoneNumber: +1-555-0100
+userPassword: {SSHA}VtWv3ufj9T+dzB8OcJ6R7E1rxX7+9YtQ
+pwdPolicySubentry: cn=default,ou=Policies,dc=ldap,dc=com
