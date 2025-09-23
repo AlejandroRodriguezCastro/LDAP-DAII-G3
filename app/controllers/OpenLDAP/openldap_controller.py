@@ -1,4 +1,5 @@
-import ldap3
+from ldap3 import Server, Connection, ALL, HASHED_SALTED_SHA, MODIFY_ADD
+from ldap3.utils.hashed import hashed
 import structlog
 from app.controllers.ldap_base_controller import LDAPBaseController
 from app.config.settings import settings
@@ -17,8 +18,8 @@ class OpenLDAPController(LDAPBaseController):
     def connect(self):
         # Implement connection logic
         logger.debug("Connecting to LDAP server...")
-        self.server = ldap3.Server(settings.LDAP_URL)
-        self.conn = ldap3.Connection(self.server, user=settings.LDAP_BIND_DN, password=settings.LDAP_BIND_PASSWORD)
+        self.server = Server(settings.LDAP_URL)
+        self.conn = Connection(self.server, user=settings.LDAP_BIND_DN, password=settings.LDAP_BIND_PASSWORD)
         self.conn.bind()
         logger.debug("LDAP connection established.")
 
@@ -27,16 +28,21 @@ class OpenLDAPController(LDAPBaseController):
         self.conn.unbind()
         logger.debug("LDAP connection closed.")
 
-    def search(self, search_base='', search_filter='', scope='BASE'):
+    def search(self, search_base='', search_filter='', scope='BASE', attributes=['*']):
         logger.debug("Searching LDAP controller:", search_base=search_base, search_filter=search_filter, scope=scope)
-        self.conn.search(search_base=search_base, search_filter=search_filter, search_scope=scope, attributes=['*'])
+        self.conn.search(search_base=search_base, search_filter=search_filter, search_scope=scope, attributes=attributes)
         return self.conn.entries, self.conn.result
 
-    def add_entry(self, dn: str, attributes: dict):
+    def add_entry(self, dn: str, attributes: dict, password: str = None):
         # Implement add entry logic
+        logger.debug("Adding LDAP entry:", dn=dn, attributes=attributes)
+        if password:
+            logger.debug("Hashing password for LDAP entry")
+            attributes['userPassword'] = hashed(HASHED_SALTED_SHA, password)
         self.conn.add(dn, attributes=attributes)
+        return self.conn.result
 
-    def modify_entry(self, dn: str, attributes: dict, operation=ldap3.MODIFY_ADD):
+    def modify_entry(self, dn: str, attributes: dict, operation=MODIFY_ADD):
         # Implement modify entry logic
         changes = {
             attr: [(operation, [val] if not isinstance(val, list) else val)]

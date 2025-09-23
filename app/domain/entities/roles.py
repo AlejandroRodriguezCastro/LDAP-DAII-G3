@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from .org_unit import OrgUnit
 
 class Role(BaseModel):
