@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Query
 import structlog
 from app.domain.services.user_service import UserService
+from app.domain.entities.user import User
 from app.config.ldap_singleton import get_ldap_port_instance
 
 logger = structlog.get_logger()
@@ -11,7 +12,7 @@ router = APIRouter(
 )
 
 
-@router.get("/")
+@router.get("/asd")
 async def get_user(user_id: str = Query(None), username: str = Query(None)):
     ldap_port_instance = await get_ldap_port_instance()
     logger.info("Using LDAPPort singleton instance:", instance=ldap_port_instance)
@@ -36,3 +37,26 @@ async def get_user(user_id: str = Query(None), username: str = Query(None)):
         status_code=status.HTTP_404_NOT_FOUND,
         detail="User not found"
     )
+
+@router.get("/dummy")
+async def dummy_endpoint():
+    ldap_port_instance = await get_ldap_port_instance()
+    logger.info("Using LDAPPort singleton instance:", instance=ldap_port_instance)
+    user_service = UserService(ldap_port_instance)
+    result = await user_service.create_user2("a")
+    return {"message": "This is a dummy endpoint", "result": result}
+
+@router.post("/", response_model=User, status_code=status.HTTP_201_CREATED)
+async def create_user(user: User):
+    logger.info("Received request to create user:", user=user)
+    ldap_port_instance = await get_ldap_port_instance()
+    user_service = UserService(ldap_port_instance)
+    try:
+        created_user = await user_service.create_user2(user)
+        return created_user
+    except Exception as e:
+        logger.error("Error creating user:", error=e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while creating the user."
+        )
