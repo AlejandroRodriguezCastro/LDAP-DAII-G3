@@ -36,6 +36,18 @@ class UnauthorizedUserError(Exception):
         self.message = f"Unauthorized to perform action: {action}" if action else "Unauthorized user."
         super().__init__(self.message)
 
+class FailUserCreationError(Exception):
+    """Raised when user creation fails due to an internal error."""
+    def __init__(self, details: str = None):
+        self.message = f"Failed to create user. {details}" if details else "Failed to create user."
+        super().__init__(self.message)
+
+def fail_user_creation_handler(request: Request, exc: FailUserCreationError):
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": str(exc)},
+    )
+
 def user_not_found_handler(request: Request, exc: UserNotFoundError):
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND,

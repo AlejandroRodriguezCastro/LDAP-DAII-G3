@@ -43,7 +43,7 @@ async def dummy_endpoint():
     ldap_port_instance = await get_ldap_port_instance()
     logger.info("Using LDAPPort singleton instance:", instance=ldap_port_instance)
     user_service = UserService(ldap_port_instance)
-    result = await user_service.create_user2("a")
+    result = await user_service.create_user("a")
     return {"message": "This is a dummy endpoint", "result": result}
 
 @router.post("/", response_model=User, status_code=status.HTTP_201_CREATED)
@@ -51,12 +51,5 @@ async def create_user(user: User):
     logger.info("Received request to create user:", user=user)
     ldap_port_instance = await get_ldap_port_instance()
     user_service = UserService(ldap_port_instance)
-    try:
-        created_user = await user_service.create_user2(user)
-        return created_user
-    except Exception as e:
-        logger.error("Error creating user:", error=e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while creating the user."
-        )
+    created_user = await user_service.create_user(user)
+    return created_user

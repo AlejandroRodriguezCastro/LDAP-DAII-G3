@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import List
 from .roles import Role
 
@@ -10,7 +10,7 @@ class User(BaseModel):
     uidNumber: int = 0
     gidNumber: int = 0
     is_active: bool = True
-    telephoneNumber: str = ""
+    telephone_number: str
     postalAddress: str = ""
     address: str = ""
     first_name: str 
@@ -19,3 +19,28 @@ class User(BaseModel):
     organization: str 
     created_at: str = Field(default_factory=lambda: "2024-01-01T00:00:00Z") # Placeholder for creation timestamp
     updated_at: str = Field(default_factory=lambda: "2024-01-01T00:00:00Z") # Placeholder for update timestamp
+    password: str = Field(..., min_length=12, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v):
+        import re
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not re.search(r"[a-z]", v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not re.search(r"\d", v):
+            raise ValueError("Password must contain at least one digit")
+        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", v):
+            raise ValueError("Password must contain at least one special character")
+        return v
+
+    @field_validator("telephone_number")
+    @classmethod
+    def validate_telephone_number(cls, v):
+        import re
+        # Accepts E.164 (+1234567890), or local (10-15 digits, optional dashes/spaces)
+        pattern = r"^(\+\d{10,15}|\d{10,15}|(\+\d{1,3}[- ]?)?\d{6,14})$"
+        if not re.match(pattern, v.replace(" ", "").replace("-", "")):
+            raise ValueError("Invalid telephone number format. Please use E.164 format (+1234567890) or local format (10-15 digits).")
+        return v

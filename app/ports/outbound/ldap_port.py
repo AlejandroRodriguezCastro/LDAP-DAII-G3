@@ -2,6 +2,7 @@ from random import randint, random
 import structlog
 from app.controllers.ldap_base_controller import LDAPBaseController
 from app.domain.entities.user import User
+from random import randint
 
 logger = structlog.get_logger()
 
@@ -12,7 +13,7 @@ class LDAPPort:
         if not isinstance(ldap_controller, LDAPBaseController):
             raise ValueError("ldap_controller must be an instance of  LDAPBaseController")
     
-    async def create_user(self, user: str):
+    async def create_user_to_delete(self, user: str):
         logger.info("LDAPPort: Creating user")
         self.ldap_controller.connect()
         
@@ -63,59 +64,39 @@ class LDAPPort:
         
         
         self.ldap_controller.disconnect()    
-    
-    async def get_user(self, username: str):
-        logger.info("LDAPPort: Getting user")
-        logger.info("Fetching user from LDAP:", username=username)
-        self.ldap_controller.connect()
-        base_dn = "ou=users,dc=example,dc=com"  # Change as needed
-        search_filter = f"(uid={username})"
-        result = self.ldap_controller.search(base_dn, search_filter, scope="SUBTREE")
-        self.ldap_controller.disconnect()
-        # If result is a tuple, get the first element
-        if isinstance(result, tuple):
-            result = result[0]
-        # If result is a list, get the first dict
-        if isinstance(result, list):
-            if result:
-                entry = result[0]
-            else:
-                entry = None
-        else:
-            entry = result
-        return entry
-    
-    async def create_user2(self, user: User):
+        
+    async def create_user(self, user: User):
         logger.info("LDAPPort: Creating user")
         self.ldap_controller.connect()        
-        
-        dn = f"uid=jdoe3,ou=OrgF2,dc=ldap,dc=com"
-        
-        response = await self.ldap_controller.add_entry(
+
+        dn = f"uid={user.username},ou={user.organization},dc=ldap,dc=com"
+
+        response = self.ldap_controller.add_entry(
             dn,
             {
-                "objectClass": ["top", "person", "organizationalPerson", "inetOrgPerson", "posixAccount"],
-                "cn": "John Doe 3",
-                "sn": "Doe 3",
-                "uid": "jdoe3",
-                "mail": "jdoe@example.com",
-                "userPassword": "password123",
-                "telephoneNumber": "123-456-7890",
-                "postalAddress": "123 Main St, Anytown, USA",
-                "uidNumber": "10001",
-                "gidNumber": "1253425",
-                "ou": "OrgF2",
-                "homeDirectory": "/home/jdoe",
-                "loginShell": "/bin/bash"
-            }
-
+            "objectClass": ["top", "person", "organizationalPerson", "inetOrgPerson", "posixAccount"],
+            "cn": f"{user.first_name} {user.last_name}",
+            "sn": user.last_name,
+            "uid": user.username,
+            "mail": user.mail,
+            "telephoneNumber": user.telephone_number,
+            "postalAddress": "123 Main St, Anytown, USA",
+            "uidNumber": str(randint(10000, 20000)),
+            "gidNumber": str(randint(20000, 30000)),
+            "ou": f"{user.organization}",
+            "homeDirectory": f"/home/{user.username}",
+            "loginShell": "/bin/bash"
+            },
+            user.password
         )
-        
-    async def check_if_mail_exists(self, mail: str):
-        logger.info("LDAPPort: Checking if mail exists")
+        self.ldap_controller.disconnect()
+        return response
+   
+    async def get_user_by_attribute(self, attr: str, value: str):
+        logger.info("LDAPPort: Getting user by attribute", attr=attr)
         self.ldap_controller.connect()
-        base_dn = "ou=People,dc=ldap,dc=com"  # Change as needed
-        search_filter = f"(mail={mail})"
+        base_dn = "dc=ldap,dc=com" 
+        search_filter = f"({attr}={value})"
         result = self.ldap_controller.search(base_dn, search_filter, scope="SUBTREE")
         self.ldap_controller.disconnect()
         # If result is a tuple, get the first element
@@ -130,6 +111,9 @@ class LDAPPort:
         else:
             entry = result
         return entry is not None
+    
+    async def get_orgs(self):
+        pass
     
     async def dummy_method(self):
         print("This is a dummy method in LDAPPort")
