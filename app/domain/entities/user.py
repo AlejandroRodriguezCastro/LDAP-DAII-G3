@@ -1,3 +1,4 @@
+from datetime import datetime, UTC
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import List
 from .roles import Role
@@ -17,8 +18,8 @@ class User(BaseModel):
     last_name: str 
     dnPath: str = "" # Distinguished Name Path in LDAP, just one domain
     organization: str 
-    created_at: str = Field(default_factory=lambda: "2024-01-01T00:00:00Z") # Placeholder for creation timestamp
-    updated_at: str = Field(default_factory=lambda: "2024-01-01T00:00:00Z") # Placeholder for update timestamp
+    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     password: str = Field(..., min_length=12, max_length=128)
 
     @field_validator("password")
@@ -34,6 +35,10 @@ class User(BaseModel):
         if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", v):
             raise ValueError("Password must contain at least one special character")
         return v
+
+    def touch(self):
+        """Update the updated_at field to the current UTC time."""
+        self.updated_at = datetime.now(UTC).isoformat()
 
     @field_validator("telephone_number")
     @classmethod
