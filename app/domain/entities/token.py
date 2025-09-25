@@ -12,6 +12,9 @@ class Token(BaseModel):
     iat: int = Field(..., description="Issued At (as UNIX timestamp): Time at which the token was issued")
     jti: str = Field(..., description="JWT ID: Unique identifier for this token")
     roles: List[str] = Field(..., description="Roles: List of roles or permissions assigned to the subject")
+    email: str = Field(..., description="Email address of the subject")
+    scope: List[str] = Field(default_factory=list, description="Scopes granted to the subject")
+    typ: str = Field(default="access", description="Type of the token (e.g., access, refresh)")
 
     def to_jwt(self, secret: str = settings.SECRET_KEY, algorithm: str = "HS256") -> str:
         payload = {
@@ -24,5 +27,11 @@ class Token(BaseModel):
             "jti": self.jti,
             "roles": self.roles,
             "azp": self.sub,
+            "email": self.email,
+            "scope": self.scope,
+            "typ": self.typ,
         }
         return jwt.encode(payload, secret, algorithm=algorithm)
+
+class TokenValidationRequest(BaseModel):
+    jwt_token: str

@@ -32,3 +32,7 @@ class LDAPBaseController(ABC):
     @abstractmethod
     def check_connection(self):
         pass
+    
+    @abstractmethod
+    def authenticate(self, user_dn: str, password: str):
+        pass
