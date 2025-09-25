@@ -1,8 +1,7 @@
-from random import randint, random
+from random import randint
 import structlog
 from app.controllers.ldap_base_controller import LDAPBaseController
 from app.domain.entities.user import User
-from random import randint
 
 logger = structlog.get_logger()
 
@@ -99,10 +98,14 @@ class LDAPPort:
         search_filter = f"({attr}={value})"
         result = self.ldap_controller.search(base_dn, search_filter, scope="SUBTREE")
         self.ldap_controller.disconnect()
-        # If result is a tuple, get the first element
+        
+        logger.debug("Search result get user by attribute:", result=result)
+        logger.debug("Type of result:", type=type(result))
         if isinstance(result, tuple):
             result = result[0]
         # If result is a list, get the first dict
+        logger.debug("Processed result after tuple check:", result=result)
+        logger.debug("Type of processed result:", type=type(result))
         if isinstance(result, list):
             if result:
                 entry = result[0]
@@ -110,7 +113,7 @@ class LDAPPort:
                 entry = None
         else:
             entry = result
-        return entry is not None
+        return entry
     
     async def delete_user(self, user_mail: str):
         logger.info("LDAPPort: Deleting user by mail", mail=user_mail)
@@ -131,6 +134,32 @@ class LDAPPort:
         
     async def get_orgs(self):
         pass
+
+    async def authenticate(self, user_dn: str, password: str) -> bool:
+        logger.info("LDAPPort: Authenticating user", user_dn=user_dn)
+        self.ldap_controller.connect()
+        is_authenticated = self.ldap_controller.authenticate(user_dn, password)
+        self.ldap_controller.disconnect()
+        return is_authenticated
+
+    async def is_account_locked(self, user_dn: str) -> bool:
+        """
+        Returns the value of pwdAccountLockedTime if the account is locked, otherwise None.
+        """
+        self.ldap_controller.connect()
+        result = self.ldap_controller.search(
+            search_base=user_dn,
+            search_filter="(objectClass=*)",
+            scope="BASE",
+            attributes=["pwdAccountLockedTime"]
+        )
+        self.ldap_controller.disconnect()
+        entries = result[0] if isinstance(result, tuple) else result
+        if entries and hasattr(entries[0], "pwdAccountLockedTime"):
+            # Return the value as a string (may be a list or single value)
+            lock_time = entries[0].pwdAccountLockedTime.value
+            return lock_time
+        return None
     
     async def dummy_method(self):
         print("This is a dummy method in LDAPPort")
