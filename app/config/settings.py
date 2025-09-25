@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     LDAP_BIND_PASSWORD: str
     SECRET_KEY: str
     TOKEN_EXPIRATION: str
+    MONGO_USER: str
+    MONGO_PASSWORD: str
+    MONGO_URI: str
     model_config = SettingsConfigDict(env_file=os.path.join(os.path.dirname(__file__), ".env"), extra="ignore")
 
     @property
