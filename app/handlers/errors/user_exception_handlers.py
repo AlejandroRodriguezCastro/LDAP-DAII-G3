@@ -2,6 +2,21 @@ from fastapi import Request, status
 from fastapi.responses import JSONResponse
 
 # User-related custom exceptions
+class UserInvalidCredentialsError(Exception):
+    """Raised when user credentials are invalid."""
+    def __init__(self, message: str = "Invalid credentials provided."):
+        self.message = message
+        super().__init__(self.message)
+class UserLockedDownError(Exception):
+    """Raised when a user account is locked down."""
+    def __init__(self, user_dn: str = None, date_until: str = None, message: str = None):
+        if message:
+            self.message = message
+        elif user_dn and date_until:
+            self.message = f"User account '{user_dn}' is locked down. Until '{date_until}'. Please contact the administrator."
+        else:
+            self.message = "User account is locked down. Please contact the administrator."
+        super().__init__(self.message)
 class UserNotFoundError(Exception):
     """Raised when a user is not found in the system."""
     def __init__(self, user_id: str = None, message: str = None):
@@ -47,6 +62,18 @@ class FailureUserDeletionError(Exception):
     def __init__(self, details: str = None):
         self.message = f"Failed to delete user. {details}" if details else "Failed to delete user."
         super().__init__(self.message)
+
+def user_invalid_credentials_handler(request: Request, exc: UserInvalidCredentialsError):
+    return JSONResponse(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        content={"detail": str(exc)},
+    )
+
+def user_locked_down_handler(request: Request, exc: UserLockedDownError):
+    return JSONResponse(
+        status_code=status.HTTP_423_LOCKED,
+        content={"detail": str(exc)},
+    )
 
 def failure_user_deletion_handler(request: Request, exc: FailureUserDeletionError):
     return JSONResponse(

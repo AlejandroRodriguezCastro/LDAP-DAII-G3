@@ -59,5 +59,19 @@ class OpenLDAPController(LDAPBaseController):
         self.conn.search(dn, '(objectClass=*)')
         return self.conn.entries
     
+    def authenticate(self, user_dn: str, password: str):
+        logger.debug("Authenticating user:", user_dn=user_dn)
+        # Ensure self.server is initialized
+        if not hasattr(self, 'server') or self.server is None:
+            self.server = Server(settings.LDAP_URL)
+        test_conn = Connection(self.server, user=user_dn, password=password)
+        if not test_conn.bind():
+            logger.debug("Authentication failed for user:", user_dn=user_dn)
+            test_conn.unbind()
+            return False
+        logger.debug("Authentication successful for user:", user_dn=user_dn)
+        test_conn.unbind()
+        return True
+    
     def check_connection(self):
         return self.conn.bound

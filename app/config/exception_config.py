@@ -7,12 +7,16 @@ from app.handlers.errors.user_exception_handlers import (
     unauthorized_user_handler,
     failure_user_creation_handler,
     failure_user_deletion_handler,
+    user_locked_down_handler,
+    user_invalid_credentials_handler,
     UserNotFoundError,
     UserAlreadyExistsError,
     InvalidUserDataError,
     UnauthorizedUserError,
     FailureUserCreationError,
-    FailureUserDeletionError
+    FailureUserDeletionError,
+    UserLockedDownError,
+    UserInvalidCredentialsError
 )
 
 logger = structlog.get_logger()
@@ -25,3 +29,5 @@ def register_exception_handlers(app: FastAPI):
     app.add_exception_handler(UnauthorizedUserError, unauthorized_user_handler)
     app.add_exception_handler(FailureUserCreationError, failure_user_creation_handler)
     app.add_exception_handler(FailureUserDeletionError, failure_user_deletion_handler)
+    app.add_exception_handler(UserLockedDownError, user_locked_down_handler)
+    app.add_exception_handler(UserInvalidCredentialsError, user_invalid_credentials_handler)
