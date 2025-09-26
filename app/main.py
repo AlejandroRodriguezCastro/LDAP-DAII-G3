@@ -6,21 +6,32 @@ from app.config.settings import settings
 from app.config.ldap_singleton import get_ldap_port_instance
 from app.utils.logging import configure_logging
 from app.config.exception_config import register_exception_handlers
+from app.config.mongo_settings import connect_db, disconnect_db
+import logging
+logging.getLogger("pymongo").setLevel(logging.WARNING)
 
 configure_logging()
 
 logger = structlog.get_logger()
 
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting up FastAPI application ...")
+    # Connect to MongoDB
+    logger.info("Connecting to MongoDB ...")
+    connect_db()
+    logger.info("MongoDB connection established.")
     ldap_instance = await get_ldap_port_instance()
     yield
     # Cleanup LDAP connection on shutdown
     if hasattr(ldap_instance, "conn") and ldap_instance.conn.bound:
         ldap_instance.conn.unbind()
         logger.info("LDAP connection purged on shutdown.")
+    # Disconnect MongoDB
+    disconnect_db()
+    logger.info("MongoDB connection closed.")
     
 app = FastAPI(title=settings.APP_NAME, version="1.0.0", lifespan=lifespan)
 logger.info("FastAPI application instance created.")

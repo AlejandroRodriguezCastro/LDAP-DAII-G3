@@ -135,6 +135,24 @@ class LDAPPort:
     async def get_orgs(self):
         pass
 
+    async def is_first_login(self, user_dn: str) -> bool:
+        logger.info("LDAPPort: Checking if first login for user", user_dn=user_dn)
+        self.ldap_controller.connect()
+        result = self.ldap_controller.search(
+            search_base=user_dn,
+            search_filter="(objectClass=*)",
+            scope="BASE",
+            attributes=["loginCount"]
+        )
+        self.ldap_controller.disconnect()
+        entries = result[0] if isinstance(result, tuple) else result
+        if entries and hasattr(entries[0], "loginCount"):
+            login_count = entries[0].loginCount.value
+            logger.info("Login count found:", user_dn=user_dn, login_count=login_count)
+            return int(login_count) == 0
+        logger.info("No loginCount attribute found, assuming first login:", user_dn=user_dn)
+        return True  # If attribute not found, assume first login
+
     async def authenticate(self, user_dn: str, password: str) -> bool:
         logger.info("LDAPPort: Authenticating user", user_dn=user_dn)
         self.ldap_controller.connect()

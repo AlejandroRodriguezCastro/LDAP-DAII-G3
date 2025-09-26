@@ -114,7 +114,9 @@ class UserService:
 
         is_authenticated = await self.ldap_port.authenticate(user_dn, password)
         logger.info("Authentication result:", user_dn=user_dn, is_authenticated=is_authenticated)
-        
+
+        # is_first_login = await self.ldap_port.is_first_login(user_dn)
+        # logger.info("Is first login check:", user_dn=user_dn, is_first_login=is_first_login)
         
         is_locked = await self.ldap_port.is_account_locked(user_dn)
         logger.info("Is locked down?", user_dn=user_dn, is_locked=is_locked)
