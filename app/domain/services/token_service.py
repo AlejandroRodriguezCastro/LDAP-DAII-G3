@@ -43,11 +43,14 @@ class TokenService:
             sub=token.sub,
             aud=token.aud,
             iss=token.iss,
+            email=token.email,
             exp=int((now + timedelta(minutes=30)).timestamp()),
             nbf=int(now.timestamp()),
             iat=int(now.timestamp()),
             jti="refreshed_unique_token_id",
-            roles=token.roles
+            roles=token.roles,
+            typ=token.typ,
+            scope=token.scope
         )
         logger.info("Token refreshed:", refreshed_token=refreshed_token)
         return refreshed_token

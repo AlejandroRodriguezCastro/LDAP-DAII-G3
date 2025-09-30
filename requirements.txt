@@ -9,5 +9,7 @@ jose
 pyjwt
 structlog
 pytest
+pytest-mock
+coverage
 pytest-asyncio
 pydantic[email]

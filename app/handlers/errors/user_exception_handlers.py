@@ -52,9 +52,18 @@ class UnauthorizedUserError(Exception):
         super().__init__(self.message)
 
 class FailureUserCreationError(Exception):
-    """Raised when user creation fails due to an internal error."""
-    def __init__(self, details: str = None):
-        self.message = f"Failed to create user. {details}" if details else "Failed to create user."
+    """Raised when user creation fails due to an internal error.
+
+    Accepts an optional message and optional details. This keeps compatibility with
+    callsites that pass either a single positional details argument or pass a
+    message and a details keyword (e.g. FailureUserCreationError("msg", details=...)).
+    """
+    def __init__(self, message: str = None, details: str = None):
+        base = message or "Failed to create user."
+        if details:
+            self.message = f"{base} {details}"
+        else:
+            self.message = base
         super().__init__(self.message)
         
 class FailureUserDeletionError(Exception):
