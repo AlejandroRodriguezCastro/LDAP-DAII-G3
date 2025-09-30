@@ -1,5 +1,5 @@
 import structlog
-import re
+from app.config.settings import settings
 from app.domain.entities.user import User
 from app.ports.outbound.ldap_port import LDAPPort
 import datetime
@@ -20,6 +20,23 @@ class UserService:
     def __init__(self, ldap_port: LDAPPort):
         self.ldap_port = ldap_port
 
+    async def get_all_users(self) -> list[User]:
+        logger.info("Fetching all users from LDAP")
+        users_data = await self.ldap_port.get_all_users()
+        if not users_data:
+            logger.info("No users found in LDAP")
+            raise UserNotFoundError("No users found.")
+        users = [User(
+            username=user.get('uid', [None])[0],
+            mail=user.get('mail', [None])[0],
+            telephone_number=user.get('telephoneNumber', [None])[0],
+            first_name=user.get('givenName', [None])[0],
+            last_name=user.get('sn', [None])[0],
+            organization=user.get('ou', [None])[0],
+            password=None  # Passwords are not fetched for security reasons
+        ) for user in users_data]
+        return users
+    
     async def get_user(self, user_mail: str) -> str:
         logger.info("Fetching user from LDAP by mail:", user_mail=user_mail)
         user_data = await self.ldap_port.get_user_by_attribute("mail", user_mail)
@@ -91,10 +108,8 @@ class UserService:
         if not deleted:
             logger.error("Failed to delete user in LDAP:", mail=user_mail)
             raise FailureUserDeletionError("Failed to delete user in LDAP.")
-    
-    async def authenticate_user(self, user_dn: str, password: str) -> bool:
-        # user_dn = "uid=arodriguez,ou=OrgA2,dc=ldap,dc=com"
-        # user_dn = "alejandro@gmail.com"
+
+    async def authenticate_user(self, user_dn: str, password: str, client_ip: str = None) -> bool:
         logger.info("Searching user by mail for authentication", mail=user_dn)
         user_data = await self.ldap_port.get_user_by_attribute("mail", user_dn)
         if not user_data:
@@ -114,6 +129,11 @@ class UserService:
 
         is_authenticated = await self.ldap_port.authenticate(user_dn, password)
         logger.info("Authentication result:", user_dn=user_dn, is_authenticated=is_authenticated)
+        
+        if is_authenticated:
+            client_ip = client_ip or "unknown"
+            await self.ldap_port.add_login_record(user_dn, client_ip)
+            await self.ldap_port.prune_login_records(user_dn, keep_last=settings.LOGIN_HISTORY_LIMIT)
 
         # is_first_login = await self.ldap_port.is_first_login(user_dn)
         # logger.info("Is first login check:", user_dn=user_dn, is_first_login=is_first_login)
@@ -137,3 +157,65 @@ class UserService:
             raise UserInvalidCredentialsError("Invalid credentials provided.")
         
         return is_authenticated
+    
+    async def modify_user_data(self, user_mail: str, new_data: dict):
+        logger.info("Modifying user data in LDAP:", mail=user_mail, new_data=new_data)
+        user_dn = await self.ldap_port.get_user_by_attribute("mail", f"{user_mail}")
+        logger.info("Mail existence check result:", exists=user_dn, mail=user_mail)
+        
+        if not user_dn:
+            logger.info("Email does not exist. User not found for modification.")
+            raise UserNotFoundError(user_mail)
+
+        user_exists = user_dn['uid'].value if 'uid' in user_dn else None
+        logger.info("User DN fetched for modification:", user_dn=user_exists)
+        if not user_exists:
+            logger.info("User DN not found in record. Cannot modify user.")
+            raise InvalidUserDataError("User DN not found in record.")
+        
+        modified = await self.ldap_port.modify_user_data(user_dn, new_data)
+        if not modified:
+            logger.error("Failed to modify user data in LDAP:", mail=user_mail)
+            raise FailureUserCreationError("Failed to modify user data in LDAP.")
+
+        # Ensure we return a User instance that matches the API response_model.
+        # The incoming `new_data` is expected to be a User model from the route,
+        # but make sure the username matches the one in LDAP (uid).
+
+        if hasattr(new_data, 'username') and user_exists:
+            new_data.username = user_exists
+
+        return new_data
+    
+    async def modify_user_password(self, user_mail: str, new_password: str):
+        logger.info("Modifying user password in LDAP:", mail=user_mail)
+        user_dn = await self.ldap_port.get_user_by_attribute("mail", f"{user_mail}")
+        logger.info("Mail existence check result:", exists=user_dn, mail=user_mail)
+        
+        if not user_dn:
+            logger.info("Email does not exist. User not found for password modification.")
+            raise UserNotFoundError(user_mail)
+
+        user_exists = user_dn['uid'].value if 'uid' in user_dn else None
+        logger.info("User DN fetched for password modification:", user_dn=user_exists)
+        if not user_exists:
+            logger.info("User DN not found in record. Cannot modify password.")
+            raise InvalidUserDataError("User DN not found in record.")
+        
+        modified = await self.ldap_port.modify_user_password(user_dn, new_password)
+        if not modified:
+            logger.error("Failed to modify user password in LDAP:", mail=user_mail)
+            raise FailureUserCreationError("Failed to modify user password in LDAP.")
+
+        return True
+    
+    async def get_last_logins(self, user_mail: str, limit: int = 5):
+        logger.info("Fetching last login history for user:", mail=user_mail, limit=limit)
+        user_dn = await self.ldap_port.get_user_by_attribute("mail", user_mail)
+        if not user_dn:
+            raise UserNotFoundError(user_mail)
+
+        dn = f"uid={user_dn['uid'].value},ou={user_dn['ou'].value},dc=ldap,dc=com"
+        logger.info("Constructed DN for fetching login history:", dn=dn)
+        history = await self.ldap_port.get_login_history(dn)
+        return history[-limit:]  # last N entries

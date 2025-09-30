@@ -60,3 +60,32 @@ async def delete_user(user_mail: str):
     ldap_port_instance = await get_ldap_port_instance()
     user_service = UserService(ldap_port_instance)
     await user_service.delete_user(user_mail)
+
+@router.put("/{user_mail}", response_model=User)
+async def update_user(user_mail: str, user: User):
+    logger.info("Received request to update user:", user_mail=user_mail, user=user)
+    ldap_port_instance = await get_ldap_port_instance()
+    user_service = UserService(ldap_port_instance)
+    updated_user = await user_service.modify_user_data(user_mail, user)
+    return updated_user
+
+@router.get("/all", response_model=list[User])
+async def get_all_users():
+    logger.info("Received request to fetch all users")
+    ldap_port_instance = await get_ldap_port_instance()
+    user_service = UserService(ldap_port_instance)
+    users = await user_service.get_all_users()
+    return users
+
+@router.post("/change-password", status_code=status.HTTP_200_OK)
+async def change_password(user_mail: str = Query(...), new_password: str = Query(...)):
+    logger.info("Received request to change password", user_mail=user_mail)
+    ldap_port_instance = await get_ldap_port_instance()
+    user_service = UserService(ldap_port_instance)
+    success = await user_service.change_password(user_mail, new_password)
+    if success:
+        return {"message": "Password changed successfully"}
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Failed to change password"
+    )
