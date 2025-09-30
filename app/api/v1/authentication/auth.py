@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Query, Request
 from pydantic import BaseModel
 import structlog
 from app.config.settings import settings
@@ -16,12 +16,13 @@ router = APIRouter(
 )
     
 @router.post("/token",  response_model=str, status_code=status.HTTP_200_OK)
-async def token(credential: ClientCredentials):
+async def token(credential: ClientCredentials, request: Request):
     logger.info("Received request to generate token for client:", client_id=credential.username)
     logger.debug("Client credentials received:", client_credentials=credential)
     ldap_port_instance = await get_ldap_port_instance()
     user_service = UserService(ldap_port_instance)
-    await user_service.authenticate_user(credential.username, credential.password)
+    logger.info("Authenticating user:", username=credential.username, client_ip=request.client.host)
+    await user_service.authenticate_user(credential.username, credential.password, client_ip=request.client.host)
     token_service = TokenService(user_service)
     token = await token_service.generate_token(credential)
     return token.to_jwt()
@@ -45,3 +46,11 @@ async def validate_token(request: TokenValidationRequest):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     logger.info("Token validation succeeded")
     return {"detail": "Token is valid"}
+
+@router.get("/login-history", status_code=status.HTTP_200_OK)
+async def get_login_history(user_mail: str, limit: int = Query(settings.LOGIN_HISTORY_LIMIT, ge=1, le=100)):
+    logger.info("Received request to get login history:", user_mail=user_mail)
+    ldap_port_instance = await get_ldap_port_instance()
+    user_service = UserService(ldap_port_instance)
+    history = await user_service.get_last_logins(user_mail, limit=limit)
+    return {"login_history": history}
