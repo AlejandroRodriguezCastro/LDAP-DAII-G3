@@ -1,4 +1,5 @@
 from random import randint
+import datetime
 import structlog
 from app.controllers.ldap_base_controller import LDAPBaseController
 from app.domain.entities.user import User
@@ -115,6 +116,22 @@ class LDAPPort:
             entry = result
         return entry
     
+    
+    async def update_user(self, user: User):
+        logger.info("LDAPPort: Updating user", username=user.username)
+        self.ldap_controller.connect()
+        dn = f"uid={user.username},ou={user.organization},dc=ldap,dc=com"
+        changes = {
+            "cn": user.first_name + " " + user.last_name,
+            "sn": user.last_name,
+            "mail": user.mail,
+            "telephoneNumber": user.telephone_number,
+            # Add other attributes as needed
+        }
+        self.ldap_controller.modify_entry(dn, changes)
+        self.ldap_controller.disconnect()
+        return True
+    
     async def delete_user(self, user_mail: str):
         logger.info("LDAPPort: Deleting user by mail", mail=user_mail)
         self.ldap_controller.connect()
@@ -183,3 +200,114 @@ class LDAPPort:
         print("This is a dummy method in LDAPPort")
         return "This is a dummy method in LDAPPort"
 
+    async def modify_user_data(self, user_dn, user: User):
+        logger.info("LDAPPort: Modifying user data", username=user_dn['uid'].value)
+        logger.debug("User data to modify:", user=user)
+        self.ldap_controller.connect()
+        dn = f"uid={user_dn['uid'].value},ou={user_dn['ou'].value},dc=ldap,dc=com"
+        logger.debug("Modifying user DN:", dn=dn)
+        changes = {
+            "cn": user.first_name + " " + user.last_name,
+            "sn": user.last_name,
+            "mail": user.mail,
+            "telephoneNumber": user.telephone_number,
+            # Add other attributes as needed
+        }
+        logger.debug("Changes to apply:", changes=changes)
+        self.ldap_controller.modify_entry(dn, changes, operation=self.ldap_controller.MODIFY_REPLACE)
+        self.ldap_controller.disconnect()
+        return True
+    
+    async def reset_user_password(self, user_dn: str, new_password: str):
+        logger.info("LDAPPort: Resetting user password", user_dn=user_dn)
+        self.ldap_controller.connect()
+        changes = {
+            "userPassword": new_password
+        }
+        self.ldap_controller.modify_entry(user_dn, changes, operation=self.ldap_controller.MODIFY_REPLACE)
+        self.ldap_controller.disconnect()
+        return True
+    
+    async def get_all_users(self):
+        logger.info("LDAPPort: Getting all users")
+        self.ldap_controller.connect()
+        base_dn = "dc=ldap,dc=com" 
+        search_filter = "(objectClass=inetOrgPerson)"
+        result = self.ldap_controller.search(base_dn, search_filter, scope="SUBTREE", attributes=["*"])
+        self.ldap_controller.disconnect()
+        
+        logger.debug("Search result get all users:", result=result)
+        logger.debug("Type of result:", type(type(result)))
+        if isinstance(result, tuple):
+            result = result[0]
+        # If result is a list, return it directly
+        logger.debug("Processed result after tuple check:", result=result)
+        logger.debug("Type of processed result:", type(type(result)))
+        if isinstance(result, list):
+            return [entry.entry_attributes_as_dict for entry in result]
+        else:
+            return []
+
+    async def add_login_record(self, user_dn: str, ip: str):
+        logger.info("LDAPPort: Adding login record", user_dn=user_dn, ip=ip)
+        now = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%SZ")
+        self.ldap_controller.connect()
+        record_dn = f"loginTimestamp={now},{user_dn}"
+
+        attributes = {
+            "objectClass": ["top", "loginRecord"],
+            "loginIP": ip,
+            "loginTimestamp": now
+        }
+
+        result = self.ldap_controller.add_entry(record_dn, attributes)
+        self.ldap_controller.disconnect()
+        return result
+    
+    async def prune_login_records(self, user_dn: str, keep_last: int = 5):
+        self.ldap_controller.connect()
+        search_filter = "(objectClass=loginRecord)"
+        result, _ = self.ldap_controller.search(
+            search_base=user_dn,
+            search_filter=search_filter,
+            scope="ONELEVEL",
+            attributes=["loginTimestamp"]
+        )
+        records = sorted(result, key=lambda e: e.loginTimestamp.value, reverse=True)
+
+        for old in records[keep_last:]:
+            self.ldap_controller.delete_entry(old.entry_dn)
+
+        self.ldap_controller.disconnect()
+        
+    async def get_login_history(self, user_dn: str) -> list[dict]:
+        logger.info("LDAPPort: Fetching login history", user_dn=user_dn)
+        self.ldap_controller.connect()
+        result, _ = self.ldap_controller.search(
+            search_base=user_dn,
+            search_filter="(objectClass=loginRecord)",
+            scope="ONELEVEL",
+            attributes=["loginIP"]
+        )
+        logger.debug("Login history search result:", result=result)
+        self.ldap_controller.disconnect()
+
+        if not result:
+            return []
+
+        history = []
+        for rec in result:
+            # Extract timestamp from DN
+            dn_parts = rec.entry_dn.split(",")[0]  # e.g. "loginTimestamp=20250930031034Z"
+            ts = dn_parts.split("=")[1]
+
+            history.append({
+                "loginTimestamp": ts,
+                "loginIP": rec.loginIP.value if "loginIP" in rec else None
+            })
+
+        # Sort newest first
+        history.sort(key=lambda x: x["loginTimestamp"], reverse=True)
+
+        logger.debug("Formatted login history:", history=history)
+        return history
