@@ -30,7 +30,7 @@ class FakeLDAPController(LDAPBaseController):
     def search(self, search_base=None, search_filter=None, scope=None, attributes=None):
         return self.entries
 
-    async def add_entry(self, dn, attributes, password=None):
+    def add_entry(self, dn, attributes, password=None):
         return self.add_result
 
     def modify_entry(self, dn, changes):
