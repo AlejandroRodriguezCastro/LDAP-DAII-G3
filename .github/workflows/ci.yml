@@ -130,12 +130,8 @@ jobs:
 
     - name: Run tests with coverage (ignore failures)
       run: |
-        set +e  # Disable exit on error
-        python -m pytest tests/ -v --cov=app --cov-report=xml --cov-report=html --cov-report=term-missing
-        EXIT_CODE=$?
-        echo "Tests completed with exit code: $EXIT_CODE"
-        echo "Coverage generated successfully"
-        exit 0  # Always exit successfully
+        python -m pytest tests/ -v --cov=app --cov-report=xml --cov-report=html --cov-report=term-missing || echo "Tests completed with some failures"
+        echo "Coverage report generated successfully"
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
