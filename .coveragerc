@@ -7,6 +7,9 @@ omit =
     */__pycache__/*
     */site-packages/*
     app/config/__pycache__/*
+    app/main.py
+    app/ports/outbound/ldap_port.py
+    app/ports/outbound/nonrelationaldb_port.py
 
 [coverage:report]
 # Regexes for lines to exclude from consideration
