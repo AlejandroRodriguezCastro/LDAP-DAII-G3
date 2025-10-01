@@ -84,11 +84,11 @@ async def test_create_user_calls_add_entry(ldap_port):
     user = User(
         username="jdoe",
         mail="jdoe@example.com",
-        telephone_number="+1234567890",  # Formato E.164 válido
+        telephone_number="+1234567890", 
         first_name="John",
         last_name="Doe",
         organization="OrgF2",
-        password="secure_password_123"  # Mínimo 12 caracteres
+        password="SecurePassword123"  
     )
     response = await port.create_user(user)
     assert response == controller.add_result
@@ -99,7 +99,6 @@ async def test_get_user_by_attribute_tuple_result(ldap_port):
     port, controller = ldap_port
     controller.entries = ([{"uid": "jdoe"}],)
     result = await port.get_user_by_attribute("uid", "jdoe")
-    # El resultado debería ser consistente con lo que retorna la función
     assert result == {"uid": "jdoe"}
 
 
@@ -108,7 +107,6 @@ async def test_get_user_by_attribute_list_result(ldap_port):
     port, controller = ldap_port
     controller.entries = [[{"uid": "jdoe"}]]
     result = await port.get_user_by_attribute("uid", "jdoe")
-    # El resultado debería ser consistente con lo que retorna la función
     assert result == [{"uid": "jdoe"}]
 
 
@@ -117,7 +115,6 @@ async def test_get_user_by_attribute_empty_list(ldap_port):
     port, controller = ldap_port
     controller.entries = [[]]
     result = await port.get_user_by_attribute("uid", "notfound")
-    # La función retorna [] cuando no encuentra nada, no None
     assert result == []
 
 
@@ -126,7 +123,7 @@ async def test_delete_user_found(ldap_port):
     port, controller = ldap_port
     entry = MagicMock()
     entry.entry_dn = "uid=jdoe,dc=ldap,dc=com"
-    controller.entries = [[entry]]
+    controller.entries = [entry]
     result = await port.delete_user("jdoe@example.com")
     assert controller.delete_called_with == entry.entry_dn
     assert result is True
@@ -154,7 +151,7 @@ async def test_is_first_login_zero_count(ldap_port):
 async def test_is_first_login_nonzero_count(ldap_port):
     port, controller = ldap_port
     entry = FakeEntry(loginCount="5")
-    controller.entries = [[entry]]
+    controller.entries = [entry]
     result = await port.is_first_login("uid=jdoe")
     assert result is False
 
@@ -187,7 +184,7 @@ async def test_authenticate_failure(ldap_port):
 async def test_is_account_locked_with_value(ldap_port):
     port, controller = ldap_port
     entry = FakeEntry(pwdAccountLockedTime="2025-01-01")
-    controller.entries = [[entry]]
+    controller.entries = [entry]
     result = await port.is_account_locked("uid=jdoe")
     assert result == "2025-01-01"
 
@@ -195,7 +192,7 @@ async def test_is_account_locked_with_value(ldap_port):
 @pytest.mark.asyncio
 async def test_is_account_locked_none(ldap_port):
     port, controller = ldap_port
-    controller.entries = [[]]
+    controller.entries = []
     result = await port.is_account_locked("uid=jdoe")
     assert result is None
 
