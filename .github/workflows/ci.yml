@@ -60,20 +60,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
 
-    services:
-      mongodb:
-        image: mongo:5.0
-        env:
-          MONGO_INITDB_ROOT_USERNAME: test_user
-          MONGO_INITDB_ROOT_PASSWORD: test_password
-        options: >-
-          --health-cmd "mongosh --eval 'db.adminCommand(\"ismaster\")'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 27017:27017
-
     steps:
     - uses: actions/checkout@v4
 
@@ -122,20 +108,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build, test]
 
-    services:
-      mongodb:
-        image: mongo:5.0
-        env:
-          MONGO_INITDB_ROOT_USERNAME: test_user
-          MONGO_INITDB_ROOT_PASSWORD: test_password
-        options: >-
-          --health-cmd "mongosh --eval 'db.adminCommand(\"ismaster\")'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 27017:27017
-
     steps:
     - uses: actions/checkout@v4
 
@@ -172,7 +144,7 @@ jobs:
         TOKEN_EXPIRATION=1h
         MONGO_USER=test_user
         MONGO_PASSWORD=test_password
-        MONGO_URI=mongodb://localhost:27017
+        MONGO_URI=sqlite:///./test_mongo.db
         MONGO_DB_NAME=test_ldap_database
         EOF
 
