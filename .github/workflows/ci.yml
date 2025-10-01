@@ -129,8 +129,9 @@ jobs:
         EOF
 
     - name: Run tests with coverage (ignore failures)
+      continue-on-error: true
       run: |
-        python -m pytest tests/ -v --cov=app --cov-report=xml --cov-report=html --cov-report=term-missing --tb=no --maxfail=999 || echo "Some tests failed but continuing..."
+        python -m pytest tests/ -v --cov=app --cov-report=xml --cov-report=html --cov-report=term-missing
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
