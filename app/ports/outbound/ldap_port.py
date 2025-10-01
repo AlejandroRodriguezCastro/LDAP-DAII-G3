@@ -38,7 +38,7 @@ class LDAPPort:
         # else:
         #     gid = None
 
-        response = await self.ldap_controller.add_entry(
+        response = self.ldap_controller.add_entry(
             dn,
             {
                 "objectClass": ["top", "person", "organizationalPerson", "inetOrgPerson", "posixAccount"],
@@ -63,7 +63,8 @@ class LDAPPort:
         # ))
         
         
-        self.ldap_controller.disconnect()    
+        self.ldap_controller.disconnect()
+        return response    
         
     async def create_user(self, user: User):
         logger.info("LDAPPort: Creating user")
