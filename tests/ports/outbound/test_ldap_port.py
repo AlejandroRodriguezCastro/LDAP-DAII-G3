@@ -88,7 +88,7 @@ async def test_create_user_calls_add_entry(ldap_port):
         first_name="John",
         last_name="Doe",
         organization="OrgF2",
-        password="SecurePassword123"  
+        password="SecurePassword123!"
     )
     response = await port.create_user(user)
     assert response == controller.add_result
