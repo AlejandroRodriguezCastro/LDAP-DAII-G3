@@ -34,6 +34,21 @@ from app.handlers.errors.role_exception_handlers import (
     UnauthorizedRoleError
 )
 
+from app.handlers.errors.organization_exception_handler import (
+    organitzation_not_found_exception_handler,
+    organization_already_exists_exception_handler,
+    invalid_organization_data_exception_handler,
+    unauthorized_organization_exception_handler,
+    failure_organization_creation_exception_handler,
+    failure_organization_deletion_exception_handler,
+    OrganizationNotFoundError,
+    OrganizationAlreadyExistsError,
+    InvalidOrganizationDataError,
+    UnauthorizedOrganizationError,
+    FailureOrganizationCreationError,
+    FailureOrganizationDeletionError
+)
+
 logger = structlog.get_logger()
 
 def register_exception_handlers(app: FastAPI):
@@ -54,4 +69,12 @@ def register_exception_handlers(app: FastAPI):
     app.add_exception_handler(FailureRoleCreationError, failure_role_creation_exception_handler)
     app.add_exception_handler(FailureRoleDeletionError, failure_role_deletion_exception_handler)
     app.add_exception_handler(UnauthorizedRoleError, unauthorized_role_exception_handler)
+    
+    logger.info("Registering organization exception handlers with FastAPI app.")
+    app.add_exception_handler(OrganizationNotFoundError, organitzation_not_found_exception_handler)
+    app.add_exception_handler(OrganizationAlreadyExistsError, organization_already_exists_exception_handler)
+    app.add_exception_handler(InvalidOrganizationDataError, invalid_organization_data_exception_handler)
+    app.add_exception_handler(UnauthorizedOrganizationError, unauthorized_organization_exception_handler)
+    app.add_exception_handler(FailureOrganizationCreationError, failure_organization_creation_exception_handler)
+    app.add_exception_handler(FailureOrganizationDeletionError, failure_organization_deletion_exception_handler)
     
