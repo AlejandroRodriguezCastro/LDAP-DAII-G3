@@ -35,19 +35,6 @@ async def test_get_user_not_found(valid_user):
     with pytest.raises(UserNotFoundError):
         await service.get_user(valid_user.mail)
 
-
-@pytest.mark.asyncio
-async def test_dummy_service_method():
-    ldap_port = AsyncMock()
-    ldap_port.dummy_method.return_value = "ok"
-    service = UserService(ldap_port)
-
-    result = await service.dummy_service_method()
-
-    assert result == "ok"
-    ldap_port.dummy_method.assert_called_once()
-
-
 @pytest.mark.asyncio
 async def test_create_user_success(valid_user):
     ldap_port = AsyncMock()

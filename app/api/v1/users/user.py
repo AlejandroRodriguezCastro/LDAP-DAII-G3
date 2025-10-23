@@ -12,7 +12,7 @@ router = APIRouter(
 )
 
 
-@router.get("/asd")
+@router.get("/get-user", response_model=User)
 async def get_user(user_id: str = Query(None), username: str = Query(None)):
     ldap_port_instance = await get_ldap_port_instance()
     logger.info("Using LDAPPort singleton instance:", instance=ldap_port_instance)
@@ -37,14 +37,6 @@ async def get_user(user_id: str = Query(None), username: str = Query(None)):
         status_code=status.HTTP_404_NOT_FOUND,
         detail="User not found"
     )
-
-@router.get("/dummy")
-async def dummy_endpoint():
-    ldap_port_instance = await get_ldap_port_instance()
-    logger.info("Using LDAPPort singleton instance:", instance=ldap_port_instance)
-    user_service = UserService(ldap_port_instance)
-    result = await user_service.create_user("a")
-    return {"message": "This is a dummy endpoint", "result": result}
 
 @router.post("/", response_model=User, status_code=status.HTTP_201_CREATED)
 async def create_user(user: User):

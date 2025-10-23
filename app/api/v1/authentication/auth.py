@@ -27,13 +27,6 @@ async def token(credential: ClientCredentials, request: Request):
     token = await token_service.generate_token(credential)
     return token.to_jwt()
     
-@router.get("/test")
-async def test_endpoint():    
-    logger.info("Received request to authenticate user:", user_dn="user_dn")
-    ldap_port_instance = await get_ldap_port_instance()
-    user_service = UserService(ldap_port_instance)
-    await user_service.authenticate_user("user_dn", "password")
-    
 @router.post("/validate", status_code=status.HTTP_200_OK)
 async def validate_token(request: TokenValidationRequest):
     logger.info("Received request to validate token:", jwt_token=request.jwt_token)

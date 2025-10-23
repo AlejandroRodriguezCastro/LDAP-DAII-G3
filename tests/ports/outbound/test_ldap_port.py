@@ -70,14 +70,6 @@ def test_init_with_invalid_controller():
 
 
 @pytest.mark.asyncio
-async def test_create_user_to_delete_calls_add_entry(ldap_port):
-    port, controller = ldap_port
-    controller.add_result = {"result": 0}
-    result = await port.create_user_to_delete("jdoe")
-    assert controller.connected is False
-
-
-@pytest.mark.asyncio
 async def test_create_user_calls_add_entry(ldap_port):
     from app.domain.entities.user import User
     port, controller = ldap_port
@@ -195,10 +187,3 @@ async def test_is_account_locked_none(ldap_port):
     controller.entries = [[]]
     result = await port.is_account_locked("uid=jdoe")
     assert result is None
-
-
-@pytest.mark.asyncio
-async def test_dummy_method_returns_string(ldap_port):
-    port, _ = ldap_port
-    result = await port.dummy_method()
-    assert result == "This is a dummy method in LDAPPort"

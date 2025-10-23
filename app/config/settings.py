@@ -7,6 +7,10 @@ from app.utils.helpers.expiration_parser import parse_expiration
 class Settings(BaseSettings):
     APP_NAME: str
     LOG_LEVEL: str
+    CORS_ALLOWED_ORIGINS: list[str] = ["*"]
+    CORS_ALLOWED_METHODS: list[str] = ["*"]
+    CORS_ALLOWED_HEADERS: list[str] = ["*"]
+    CORS_ALLOW_CREDENTIALS: bool = True
     DATABASE_URL: str
     QUEUE_URL: str
     LDAP_URL: str
