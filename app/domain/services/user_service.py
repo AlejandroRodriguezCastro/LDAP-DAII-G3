@@ -21,19 +21,27 @@ class UserService:
         self.ldap_port = ldap_port
 
     async def get_all_users(self) -> list[User]:
+        first_or_none = lambda v: v[0] if isinstance(v, list) and v else v or None
+
         logger.info("Fetching all users from LDAP")
         users_data = await self.ldap_port.get_all_users()
+        logger.debug("Users data fetched:", users_data=users_data)
         if not users_data:
             logger.info("No users found in LDAP")
             raise UserNotFoundError("No users found.")
         users = [User(
-            username=user.get('uid', [None])[0],
-            mail=user.get('mail', [None])[0],
-            telephone_number=user.get('telephoneNumber', [None])[0],
-            first_name=user.get('givenName', [None])[0],
-            last_name=user.get('sn', [None])[0],
-            organization=user.get('ou', [None])[0],
-            password=None  # Passwords are not fetched for security reasons
+            username=first_or_none(user.get("uid")),
+            mail=first_or_none(user.get("mail")),
+            telephone_number=first_or_none(user.get("telephoneNumber")),
+            first_name=(
+                first_or_none(user.get("givenName"))
+                or (
+                    lambda cn, sn: " ".join(cn.split()[:-len(sn.split())]) if cn and sn and cn.endswith(sn) else cn
+                )(first_or_none(user.get("cn")), first_or_none(user.get("sn")))
+            ),
+            last_name=first_or_none(user.get("sn")),
+            organization=first_or_none(user.get("ou", "Unknown")),
+            password="asd324ewrf!@#QWEqwe"  # Placeholder, not returned by LDAP
         ) for user in users_data]
         return users
     
@@ -45,15 +53,6 @@ class UserService:
             raise UserNotFoundError(user_mail)
         logger.info("User data found for mail:", mail=user_mail, user_data=user_data)
         return user_data['uid'].value if 'uid' in user_data else None
-        
-    
-    async def dummy_service_method(self):
-        logger.info("Calling dummy service method")
-        return await self.ldap_port.dummy_method()
-
-    async def create_user_to_delete(self, user_data: User) -> User:
-        logger.info("Creating user in LDAP:", username=user_data)
-        await self.ldap_port.create_user_to_delete("jdoe")
     
     async def create_user(self, user: User) -> User:
         logger.info("Creating user in LDAP:", username=user.mail)
