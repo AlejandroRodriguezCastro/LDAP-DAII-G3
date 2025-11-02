@@ -15,9 +15,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Write test .env from secret
+      - name: Write test .env where Settings expects it (app/config/.env)
         run: |
-          printf "%s" "${{ secrets.OPENLDAP_TEST_ENV_FILE }}" > .env
+          mkdir -p app/config
+          printf "%s" "${{ secrets.OPENLDAP_TEST_ENV_FILE }}" > app/config/.env
 
       - name: Set up Python
         uses: actions/setup-python@v5
