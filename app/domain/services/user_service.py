@@ -213,6 +213,13 @@ class UserService:
         user_dn = await self.ldap_port.get_user_by_attribute("mail", user_mail)
         if not user_dn:
             raise UserNotFoundError(user_mail)
+        # Normalise user_dn shapes: LDAPPort may return a list of entries or a single entry dict/object
+        if isinstance(user_dn, list):
+            # If it's a list, take the first entry (most searches expect the first match)
+            user_dn = user_dn[0] if user_dn else None
+
+        if not user_dn:
+            raise UserNotFoundError(user_mail)
 
         dn = f"uid={user_dn['uid'].value},ou={user_dn['ou'].value},dc=ldap,dc=com"
         logger.info("Constructed DN for fetching login history:", dn=dn)
