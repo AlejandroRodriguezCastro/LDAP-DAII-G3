@@ -20,6 +20,17 @@ class UserService:
     def __init__(self, ldap_port: LDAPPort):
         self.ldap_port = ldap_port
 
+    def _ensure_single_entry(self, entry):
+        """Normalize possible LDAPPort return shapes.
+
+        LDAP adapters may return a list of entries or a single entry object/dict.
+        This helper returns the first entry if a non-empty list is provided,
+        None if the list is empty, or the original entry otherwise.
+        """
+        if isinstance(entry, list):
+            return entry[0] if entry else None
+        return entry
+
     async def get_all_users(self) -> list[User]:
         first_or_none = lambda v: v[0] if isinstance(v, list) and v else v or None
 
@@ -48,6 +59,8 @@ class UserService:
     async def get_user(self, user_mail: str) -> str:
         logger.info("Fetching user from LDAP by mail:", user_mail=user_mail)
         user_data = await self.ldap_port.get_user_by_attribute("mail", user_mail)
+        # Normalise shapes: LDAPPort may return a list or a single entry
+        user_data = self._ensure_single_entry(user_data)
         if not user_data:
             logger.info("User not found for mail:", mail=user_mail)
             raise UserNotFoundError(user_mail)
@@ -111,13 +124,14 @@ class UserService:
     async def authenticate_user(self, user_dn: str, password: str, client_ip: str = None) -> bool:
         logger.info("Searching user by mail for authentication", mail=user_dn)
         user_data = await self.ldap_port.get_user_by_attribute("mail", user_dn)
+        # Normalise shapes: LDAPPort may return a list or a single entry
+        user_data = self._ensure_single_entry(user_data)
         if not user_data:
             logger.info("User not found for mail", mail=user_dn)
             raise UserNotFoundError(user_dn)
         logger.info("User data found for mail", mail=user_dn, user_data=user_data)
-        
-        uid = user_data['uid'].value if user_data['uid'].value else None
-        ou = user_data['ou'].value if user_data['ou'].value else None
+        uid = user_data['uid'].value if 'uid' in user_data and user_data['uid'].value else None
+        ou = user_data['ou'].value if 'ou' in user_data and user_data['ou'].value else None
 
         if not uid or not ou:
             logger.info("User found but missing uid or ou", user=user_data)
@@ -160,6 +174,8 @@ class UserService:
     async def modify_user_data(self, user_mail: str, new_data: dict):
         logger.info("Modifying user data in LDAP:", mail=user_mail, new_data=new_data)
         user_dn = await self.ldap_port.get_user_by_attribute("mail", f"{user_mail}")
+        # Normalise shapes: LDAPPort may return a list or a single entry
+        user_dn = self._ensure_single_entry(user_dn)
         logger.info("Mail existence check result:", exists=user_dn, mail=user_mail)
         
         if not user_dn:
@@ -189,6 +205,8 @@ class UserService:
     async def modify_user_password(self, user_mail: str, new_password: str):
         logger.info("Modifying user password in LDAP:", mail=user_mail)
         user_dn = await self.ldap_port.get_user_by_attribute("mail", f"{user_mail}")
+        # Normalise shapes: LDAPPort may return a list or a single entry
+        user_dn = self._ensure_single_entry(user_dn)
         logger.info("Mail existence check result:", exists=user_dn, mail=user_mail)
         
         if not user_dn:
