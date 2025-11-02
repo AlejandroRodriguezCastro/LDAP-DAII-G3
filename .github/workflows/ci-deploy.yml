@@ -96,36 +96,48 @@ jobs:
       name: production
     if: github.ref == 'refs/heads/main' && needs.test.result == 'success'
     runs-on: ubuntu-latest
+    env:
+      APP_DIR: ${{ vars.APP_DIR || '/opt/openldap' }}
+      SSH_PORT: ${{ vars.EC2_PORT || '22' }}  # optional repo variable
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare SSH key
+      - name: Prepare SSH
         run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
           install -m 600 /dev/null ~/.ssh/id_ec2
-          printf "%s" "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_ec2
-          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+          printf '%s' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_ec2
+          # Host key (use -p if you’re not on 22)
+          ssh-keyscan -p "$SSH_PORT" -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Rsync repository to EC2
         run: |
-          TARGET="${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:${{ vars.APP_DIR || '/opt/openldap' }}"
+          RSYNC_SSH="ssh -i ~/.ssh/id_ec2 -o StrictHostKeyChecking=yes -p $SSH_PORT"
           rsync -az --delete \
             --exclude '.git/' --exclude '.github/' --exclude '.venv/' \
             --exclude '__pycache__/' --exclude 'htmlcov/' --exclude '*.pyc' \
-            -e "ssh -i ~/.ssh/id_ec2" ./ "$TARGET"/
+            -e "$RSYNC_SSH" ./ \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:${APP_DIR}/"
 
-      - name: Create/Update prod .env on EC2 from multiline secret
+      - name: Write prod .env on EC2 from secret (0600)
+        env:
+          PROD_ENV: ${{ secrets.OPENLDAP_ENV_FILE }}
         run: |
-          install -m 600 /dev/null .env.prod.ci
-          printf "%s" "${{ secrets.OPENLDAP_ENV_FILE }}" > .env.prod.ci
-          scp -i ~/.ssh/id_ec2 ./.env.prod.ci \
-            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/tmp/openldap.env
-          ssh -i ~/.ssh/id_ec2 ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+          set -euo pipefail
+          # ship to a temp path then install with secure perms
+          printf '%s' "$PROD_ENV" > .env.prod.ci
+          scp -P "$SSH_PORT" -i ~/.ssh/id_ec2 .env.prod.ci \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/tmp/openldap.env"
+          ssh -p "$SSH_PORT" -i ~/.ssh/id_ec2 "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
             'sudo install -m 600 -o root -g root /tmp/openldap.env /opt/openldap/.env && rm -f /tmp/openldap.env'
           rm -f .env.prod.ci
 
       - name: Deploy (venv install + restart systemd)
         run: |
-          ssh -i ~/.ssh/id_ec2 ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} 'bash /opt/openldap/deploy.sh'
+          ssh -p "$SSH_PORT" -i ~/.ssh/id_ec2 "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
+            'bash /opt/openldap/deploy.sh'
 
       # - name: Smoke test
       #   run: |
