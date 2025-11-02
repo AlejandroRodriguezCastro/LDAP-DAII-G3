@@ -103,14 +103,23 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Prepare SSH
+        env:
+          SSH_PORT: ${{ vars.EC2_PORT || '22' }}
+          EC2_SSH_KEY_B64: ${{ secrets.EC2_SSH_KEY_B64 }}
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          install -m 600 /dev/null ~/.ssh/id_ec2
-          printf '%s' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_ec2
-          # Host key (use -p if you’re not on 22)
+          # Decode, normalize line endings, set permissions
+          echo "$EC2_SSH_KEY_B64" | base64 -d > ~/.ssh/id_ec2
+          sed -i 's/\r$//' ~/.ssh/id_ec2
+          chmod 600 ~/.ssh/id_ec2
+          # Add host key
           ssh-keyscan -p "$SSH_PORT" -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+          # Quick connectivity check (won't leak secrets)
+          ssh -p "$SSH_PORT" -i ~/.ssh/id_ec2 -o StrictHostKeyChecking=yes \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" 'true'
+
 
       - name: Rsync repository to EC2
         run: |
