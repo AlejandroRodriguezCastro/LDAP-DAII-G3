@@ -15,13 +15,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # - name: Write test .env (app/config/.env) from secret
+      #   run: |
+      #     mkdir -p app/config
+      #     printf "%s" "${{ secrets.OPENLDAP_TEST_ENV_FILE }}" > app/config/.env
+      #     echo "Wrote test .env file with size:" $(stat -c%s app/config/.env) "bytes"
+      #     echo "Contents preview (first 15 lines):"
+      #     head -n 15 app/config/.env || true
+
       - name: Write test .env (app/config/.env) from secret
+        env:
+          TEST_ENV_CONTENT: ${{ secrets.OPENLDAP_TEST_ENV_FILE }}
         run: |
           mkdir -p app/config
-          printf "%s" "${{ secrets.OPENLDAP_TEST_ENV_FILE }}" > app/config/.env
-          echo "Wrote test .env file with size:" $(stat -c%s app/config/.env) "bytes"
-          echo "Contents preview (first 15 lines):"
-          head -n 15 app/config/.env || true
+          python - <<'PY'
+          import os, sys, pathlib
+          content = os.environ.get("TEST_ENV_CONTENT", "")
+          pathlib.Path("app/config").mkdir(parents=True, exist_ok=True)
+          with open("app/config/.env", "wb") as f:
+              f.write(content.encode("utf-8"))
+          size = pathlib.Path("app/config/.env").stat().st_size
+          print("WROTE app/config/.env with", size, "bytes")
+          sys.exit(0 if size > 0 else 2)
+          PY
+
 
       - name: Fail if .env is empty
         run: |
