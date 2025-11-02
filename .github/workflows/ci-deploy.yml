@@ -1,0 +1,132 @@
+# .github/workflows/ci-deploy.yml
+name: Test, Coverage, and Deploy to EC2 (openldap)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    environment:
+      name: test
+    steps:
+      - uses: actions/checkout@v4
+
+      # - name: Write test .env (app/config/.env) from secret
+      #   run: |
+      #     mkdir -p app/config
+      #     printf "%s" "${{ secrets.OPENLDAP_TEST_ENV_FILE }}" > app/config/.env
+      #     echo "Wrote test .env file with size:" $(stat -c%s app/config/.env) "bytes"
+      #     echo "Contents preview (first 15 lines):"
+      #     head -n 15 app/config/.env || true
+
+      - name: Write test .env (app/config/.env) from secret
+        env:
+          TEST_ENV_CONTENT: ${{ secrets.OPENLDAP_TEST_ENV_FILE }}
+        run: |
+          mkdir -p app/config
+          python - <<'PY'
+          import os, sys, pathlib
+          content = os.environ.get("TEST_ENV_CONTENT", "")
+          pathlib.Path("app/config").mkdir(parents=True, exist_ok=True)
+          with open("app/config/.env", "wb") as f:
+              f.write(content.encode("utf-8"))
+          size = pathlib.Path("app/config/.env").stat().st_size
+          print("WROTE app/config/.env with", size, "bytes")
+          sys.exit(0 if size > 0 else 2)
+          PY
+
+
+      - name: Fail if .env is empty
+        run: |
+          if [ ! -s app/config/.env ]; then
+            echo "::error title=.env is empty::Secret OPENLDAP_TEST_ENV_FILE is missing or blank."
+            echo "Check repo Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      - name: Export test env vars from secret
+        run: |
+          printf "%s\n" "${{ secrets.OPENLDAP_TEST_ENV_FILE }}" >> "$GITHUB_ENV"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          # Make sure test tools are present
+          pip install pytest pytest-cov coverage
+
+      - name: Sanity check Settings load
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("app/config/.env")
+          print("ENV FILE EXISTS:", p.exists(), "SIZE:", p.stat().st_size if p.exists() else 0)
+          from app.config.settings import get_settings
+          s = get_settings()
+          print("Loaded APP_NAME ok?", bool(getattr(s, "APP_NAME", "")))
+          PY
+
+      - name: Run tests with coverage
+        run: |
+          pytest --maxfail=1 -q \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-report=html
+
+      - name: Upload HTML coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: htmlcov
+          path: htmlcov
+          retention-days: 7
+
+  deploy:
+    needs: test
+    environment:
+      name: production
+    if: github.ref == 'refs/heads/main' && needs.test.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare SSH key
+        run: |
+          install -m 600 /dev/null ~/.ssh/id_ec2
+          printf "%s" "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_ec2
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Rsync repository to EC2
+        run: |
+          TARGET="${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:${{ vars.APP_DIR || '/opt/openldap' }}"
+          rsync -az --delete \
+            --exclude '.git/' --exclude '.github/' --exclude '.venv/' \
+            --exclude '__pycache__/' --exclude 'htmlcov/' --exclude '*.pyc' \
+            -e "ssh -i ~/.ssh/id_ec2" ./ "$TARGET"/
+
+      - name: Create/Update prod .env on EC2 from multiline secret
+        run: |
+          install -m 600 /dev/null .env.prod.ci
+          printf "%s" "${{ secrets.OPENLDAP_ENV_FILE }}" > .env.prod.ci
+          scp -i ~/.ssh/id_ec2 ./.env.prod.ci \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/tmp/openldap.env
+          ssh -i ~/.ssh/id_ec2 ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+            'sudo install -m 600 -o root -g root /tmp/openldap.env /opt/openldap/.env && rm -f /tmp/openldap.env'
+          rm -f .env.prod.ci
+
+      - name: Deploy (venv install + restart systemd)
+        run: |
+          ssh -i ~/.ssh/id_ec2 ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} 'bash /opt/openldap/deploy.sh'
+
+      # - name: Smoke test
+      #   run: |
+      #     curl -fsS --retry 5 --retry-connrefused "http://${{ secrets.EC2_HOST }}:8081/" >/dev/null
