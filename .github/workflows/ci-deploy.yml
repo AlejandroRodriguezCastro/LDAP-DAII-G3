@@ -19,6 +19,9 @@ jobs:
         run: |
           mkdir -p app/config
           printf "%s" "${{ secrets.OPENLDAP_TEST_ENV_FILE }}" > app/config/.env
+          echo "Wrote test .env file with size:" $(stat -c%s app/config/.env) "bytes"
+          echo "Contents preview (first 15 lines):"
+          head -n 15 app/config/.env || true
 
       - name: Fail if .env is empty
         run: |
