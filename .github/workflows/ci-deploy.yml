@@ -15,26 +15,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Write test .env (app/config/.env)
+      - name: Write test .env (app/config/.env) from secret
         run: |
           mkdir -p app/config
           printf "%s" "${{ secrets.OPENLDAP_TEST_ENV_FILE }}" > app/config/.env
 
+      - name: Fail if .env is empty
+        run: |
+          if [ ! -s app/config/.env ]; then
+            echo "::error title=.env is empty::Secret OPENLDAP_TEST_ENV_FILE is missing or blank."
+            echo "Check repo Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
       - name: Export test env vars from secret
         run: |
           printf "%s\n" "${{ secrets.OPENLDAP_TEST_ENV_FILE }}" >> "$GITHUB_ENV"
-
-      - name: Sanity check Settings load
-        run: |
-          python - <<'PY'
-          import os, sys
-          from pathlib import Path
-          p = Path("app/config/.env")
-          print("ENV FILE EXISTS:", p.exists(), "SIZE:", p.stat().st_size if p.exists() else 0)
-          from app.config.settings import get_settings
-          s = get_settings()
-          print("Loaded APP_NAME:", bool(getattr(s, "APP_NAME", "")))
-          PY
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -45,7 +41,19 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          # Make sure test tools are present
           pip install pytest pytest-cov coverage
+
+      - name: Sanity check Settings load
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("app/config/.env")
+          print("ENV FILE EXISTS:", p.exists(), "SIZE:", p.stat().st_size if p.exists() else 0)
+          from app.config.settings import get_settings
+          s = get_settings()
+          print("Loaded APP_NAME ok?", bool(getattr(s, "APP_NAME", "")))
+          PY
 
       - name: Run tests with coverage
         run: |
