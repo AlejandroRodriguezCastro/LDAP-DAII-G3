@@ -13,3 +13,4 @@ pytest-mock
 coverage
 pytest-asyncio
 pydantic[email]
+httpx
