@@ -2,7 +2,7 @@
 import structlog
 import uuid
 import jwt
-from app.domain.entities.token import Token
+from app.domain.entities.token import Token, TokenValidationRequest
 from app.domain.entities.client_credentials import ClientCredentials
 from app.domain.services.user_service import UserService
 from app.config.settings import settings
@@ -20,6 +20,9 @@ class TokenService:
         logger.info("Generating token for client:", client_id=client_credentials.username)
         now = datetime.now(timezone.utc)
         # Add more claims: email, scope, typ
+        roles_objects = await self.user_service.get_user_roles(client_credentials.username)
+        # Extract role names from Role objects
+        roles_names = [role.name for role in roles_objects] if roles_objects else []
         token = Token(
             sub= await self.user_service.get_user(client_credentials.username),
             aud="ldap.com",
@@ -28,7 +31,7 @@ class TokenService:
             nbf=int(now.timestamp()),
             iat=int(now.timestamp()),
             jti=str(uuid.uuid4()),
-            roles=client_credentials.roles,
+            roles=roles_names,
             email=client_credentials.username,
             scope=getattr(client_credentials, "scopes", []),
             typ="access"
@@ -65,14 +68,7 @@ class TokenService:
         try:
             if jwt_token:
                 # Validate JWT signature and claims
-                payload = jwt.decode(
-                    jwt_token,
-                    settings.SECRET_KEY,
-                    algorithms=["HS256"],
-                    audience="ldap.com",
-                    issuer="auth_server",
-                    options={"require": ["exp", "nbf", "iat", "aud", "iss"]}
-                )
+                payload = TokenValidationRequest(jwt_token=jwt_token).decode_jwt()
                 logger.info("JWT signature and claims valid", payload=payload)
                 return True
             elif token:
@@ -91,6 +87,12 @@ class TokenService:
             else:
                 logger.error("No token or jwt_token provided for validation")
                 return False
+        except jwt.ExpiredSignatureError:
+            logger.warning("JWT token has expired")
+            return False
+        except jwt.InvalidTokenError as e:
+            logger.warning(f"JWT token is invalid: {e}")
+            return False
         except jwt.ExpiredSignatureError:
             logger.warning("JWT token has expired")
             return False

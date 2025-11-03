@@ -13,7 +13,12 @@ router = APIRouter(
 
 
 @router.get("/get-user", response_model=User)
-async def get_user(user_id: str = Query(None), username: str = Query(None)):
+async def get_user(user_id: str | None = Query(default=None), username: str | None = Query(default=None)):
+    if user_id is None and username is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Either user_id or username query parameter is required"
+        )
     ldap_port_instance = await get_ldap_port_instance()
     logger.info("Using LDAPPort singleton instance:", instance=ldap_port_instance)
     user_entity = UserService(ldap_port_instance)
@@ -26,11 +31,6 @@ async def get_user(user_id: str = Query(None), username: str = Query(None)):
         user = await user_entity.get_user(username)
         logger.debug("Result from get_user_by_username:", user=user)
         logger.info("User fetched by username:", username=username)
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Either user_id or username query parameter is required"
-        )
     if user:
         return user
     raise HTTPException(
