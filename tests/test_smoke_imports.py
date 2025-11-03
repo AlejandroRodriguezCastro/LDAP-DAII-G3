@@ -7,6 +7,7 @@ from app.domain.services.user_service import UserService
 from app.domain.services.organization_unit_service import OrganizationUnitService
 from app.domain.entities.user import User
 from app.domain.entities.organization_unit import OrganizationUnit
+from app.domain.entities.roles import Role
 from app.handlers.errors.user_exception_handlers import (
     UserNotFoundError,
     UserAlreadyExistsError,
@@ -190,7 +191,7 @@ def test_user_service_get_all_and_not_found():
     assert users and users[0].username == u.username
 
 
-def test_user_service_get_user_and_create_delete():
+def test_user_service_get_user_and_create_delete(patch_role_service):
     ldap = FakeLDAPPort()
     svc = UserService(ldap)
 

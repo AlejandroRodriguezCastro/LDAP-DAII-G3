@@ -4,7 +4,7 @@ from app.domain.entities.roles import Role
 
 @pytest.fixture
 def valid_role():
-    return Role(name="admin", description="Administrator role")
+    return Role(name="admin", description="Administrator role", organization="UADE")
 
 @pytest.fixture
 def valid_user_data(valid_role):

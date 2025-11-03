@@ -12,9 +12,16 @@ from app.handlers.errors.user_exception_handlers import (
     UserLockedDownError,
     UserInvalidCredentialsError
 )
+from app.domain.services.role_service import RoleService
+from app.domain.services.user_role_service import UserRoleService
+from app.ports.outbound.nonrelationaldb_port import NonRelationalDBPort
+from app.config.mongo_settings import connect_db
 
 
 logger = structlog.get_logger()
+
+role_service = RoleService(NonRelationalDBPort(non_relational_db=connect_db(), db_name="ldap-roles"), collection_name=settings.ROLES_COLLECTION_NAME)
+user_role_service = UserRoleService(NonRelationalDBPort(non_relational_db=connect_db(), db_name="ldap-roles"), collection_name=settings.USER_ROLES_COLLECTION_NAME)
 
 class UserService:
     def __init__(self, ldap_port: LDAPPort):
@@ -40,22 +47,86 @@ class UserService:
         if not users_data:
             logger.info("No users found in LDAP")
             raise UserNotFoundError("No users found.")
-        users = [User(
-            username=first_or_none(user.get("uid")),
-            mail=first_or_none(user.get("mail")),
-            telephone_number=first_or_none(user.get("telephoneNumber")),
-            first_name=(
+        users = []
+        for user in users_data:
+            username_val = first_or_none(user.get("uid"))
+            mail_val = first_or_none(user.get("mail"))
+            telephone_val = first_or_none(user.get("telephoneNumber"))
+            first_name_val = (
                 first_or_none(user.get("givenName"))
                 or (
                     lambda cn, sn: " ".join(cn.split()[:-len(sn.split())]) if cn and sn and cn.endswith(sn) else cn
                 )(first_or_none(user.get("cn")), first_or_none(user.get("sn")))
-            ),
-            last_name=first_or_none(user.get("sn")),
-            organization=first_or_none(user.get("ou", "Unknown")),
-            password="asd324ewrf!@#QWEqwe"  # Placeholder, not returned by LDAP
-        ) for user in users_data]
+            )
+            last_name_val = first_or_none(user.get("sn"))
+            organization_val = first_or_none(user.get("ou", "Unknown"))
+
+            # Attempt to fetch role ids for this username from the user_roles collection
+            roles_for_user = []
+            try:
+                if username_val:
+                    user_roles_doc = user_role_service.non_relational_db_port.find_entry(
+                        user_role_service.collection, {"username": username_val}
+                    )
+                    logger.debug("Fetched user roles document for user", username=username_val, user_roles_doc=user_roles_doc)
+                    if user_roles_doc:
+                        role_ids = user_roles_doc.get("roles", []) or []
+                        try:
+                            # Resolve role ids to Role models
+                            roles_for_user = role_service.get_roles_by_ids(role_ids) if role_ids else []
+                            logger.debug("Resolved roles for user", username=username_val, roles=roles_for_user)
+                        except Exception as e:
+                            # If roles can't be resolved by ID, fall back to organization-based roles
+                            logger.debug("Could not resolve roles by ID for user, falling back to organization", username=username_val, role_ids=role_ids, error=str(e))
+                            try:
+                                if organization_val and organization_val != "Unknown":
+                                    roles_for_user = role_service.get_roles_by_organization(organization_val)
+                                    logger.debug("Resolved roles for user by organization", username=username_val, organization=organization_val, roles=roles_for_user)
+                            except Exception:
+                                logger.debug("Could not resolve roles by organization for user", username=username_val, organization=organization_val)
+            except Exception:
+                logger.exception("Error fetching user roles for user", username=username_val)
+
+            users.append(User(
+                username=username_val,
+                mail=mail_val,
+                telephone_number=telephone_val,
+                first_name=first_name_val,
+                last_name=last_name_val,
+                organization=organization_val,
+                roles=roles_for_user,
+                password="asd324ewrf!@#QWEqwe"  # Placeholder, not returned by LDAP
+            ))
+
         return users
     
+    async def get_user_roles(self, user_mail: str) -> list[str]:
+        logger.info("Fetching roles for user by mail:", user_mail=user_mail)
+        
+        # First, retrieve the username from the mail
+        username = await self.get_user(user_mail)
+        logger.debug("Retrieved username for mail:", mail=user_mail, username=username)
+        
+        if not username:
+            logger.info("Could not retrieve username for mail:", user_mail=user_mail)
+            raise UserNotFoundError(user_mail)
+        
+        # Then, retrieve the roles for that user
+        user_roles_doc = user_role_service.non_relational_db_port.find_entry(
+            user_role_service.collection, {"username": username}
+        )
+        logger.debug("Fetched user roles document:", username=username, user_roles_doc=user_roles_doc)
+        
+        if user_roles_doc:
+            role_ids = user_roles_doc.get("roles", []) or []
+            logger.debug("Role IDs fetched for user:", username=username, role_ids=role_ids)
+            roles = role_service.get_roles_by_ids(role_ids) if role_ids else []
+            logger.info("Retrieved roles for user:", username=username, roles=roles)
+            return roles
+        else:
+            logger.info("No roles found for user:", username=username)
+            return []
+
     async def get_user(self, user_mail: str) -> str:
         logger.info("Fetching user from LDAP by mail:", user_mail=user_mail)
         user_data = await self.ldap_port.get_user_by_attribute("mail", user_mail)
@@ -98,7 +169,32 @@ class UserService:
         if not check_organization:
             logger.info("Organization does not exist. User not created.")
             raise InvalidUserDataError("Organization does not exist.")
-
+        # Check if role or roles exist for the organization unit
+        roles = role_service.get_roles_by_organization(user.organization)
+        logger.debug("Roles fetched for user's organization unit:", organization=user.organization, roles=roles)
+        if not roles:
+            logger.info("No roles found for the user's organization unit. User not created.", organization=user.organization)
+            raise InvalidUserDataError("No roles found for the user's organization unit.")
+                
+        if user.roles:
+            logger.debug("Adding roles to user before creation:", username=user.username, roles=user.roles)
+            # Check which roles (if any) do not exist in the roles collection
+            existing_role_names = {r.name for r in roles}
+            missing_roles = [ur.name for ur in user.roles if ur.name not in existing_role_names]
+            if missing_roles:
+                logger.info(
+                    "One or more roles do not exist in roles collection. User not created.",
+                    username=user.username,
+                    missing_roles=missing_roles,
+                )
+                raise InvalidUserDataError(f"One or more roles do not exist in roles collection: {', '.join(missing_roles)}")
+            added_roles = user_role_service.add_roles_to_user(user.username, user.roles)
+            logger.info("Roles added to user:", username=user.username, roles=user.roles, added_count=added_roles)
+        
+        if user.roles and not added_roles:
+            logger.info("Failed to add roles to user. User not created.", username=user.username, roles=user.roles)
+            raise FailureUserCreationError("Failed to add roles to user.")
+        
         response = await self.ldap_port.create_user(user)
         
         logger.info("User creation response from LDAP:", response=response)

@@ -36,7 +36,7 @@ async def test_get_user_not_found(valid_user):
         await service.get_user(valid_user.mail)
 
 @pytest.mark.asyncio
-async def test_create_user_success(valid_user):
+async def test_create_user_success(patch_role_service, valid_user):
     ldap_port = AsyncMock()
     ldap_port.get_user_by_attribute.side_effect = [None, None, {"ou": "UADE"}]  # email not exists, username not exists, org exists
     ldap_port.create_user.return_value = {"result": 0}
@@ -70,7 +70,7 @@ async def test_create_user_invalid_org(valid_user):
 
 
 @pytest.mark.asyncio
-async def test_create_user_failure(valid_user):
+async def test_create_user_failure(patch_role_service, valid_user):
     ldap_port = AsyncMock()
     ldap_port.get_user_by_attribute.side_effect = [None, None, {"ou": "UADE"}]
     ldap_port.create_user.return_value = {"result": 1}  # fails

@@ -1,6 +1,7 @@
 # FastAPI endpoint for role creation
 from fastapi import APIRouter, HTTPException
 import structlog
+from app.config.settings import settings
 from app.domain.entities.roles import Role
 from app.domain.services.role_service import RoleService
 from app.ports.outbound.nonrelationaldb_port import NonRelationalDBPort
@@ -13,7 +14,7 @@ router = APIRouter(
     tags=["roles"]
 )
 
-role_service = RoleService(NonRelationalDBPort(non_relational_db=connect_db(), db_name="ldap-roles"))
+role_service = RoleService(NonRelationalDBPort(non_relational_db=connect_db(), db_name="ldap-roles"), collection_name=settings.ROLES_COLLECTION_NAME)
 
 @router.post("/", response_model=dict)
 async def create_role(role: Role):
@@ -33,6 +34,11 @@ async def delete_role(role_id: str):
     deleted_count = role_service.delete_role(role_id)
     return {"deleted_count": deleted_count}
 
+@router.get("/organization/{organization_name}", response_model=dict)
+async def get_roles_by_organization(organization_name: str):
+    logger.info("Received request to fetch roles by organization", organization_name=organization_name)
+    roles = role_service.get_roles_by_organization(organization_name)
+    return {"roles": roles}
 
 @router.delete("/", response_model=dict)
 async def delete_roles_by_name(role_name: str):

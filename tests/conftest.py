@@ -1,5 +1,6 @@
 import pytest
 import time
+from unittest.mock import AsyncMock, MagicMock, patch
 from app.domain.entities.user import User
 from app.domain.entities.roles import Role
 from app.domain.entities.token import Token
@@ -10,12 +11,12 @@ from app.domain.entities.token import Token
 # -------------------------------
 @pytest.fixture
 def role_admin():
-    return Role(name="admin", description="Administrator role")
+    return Role(name="admin", description="Administrator role", organization="UADE")
 
 
 @pytest.fixture
 def role_user():
-    return Role(name="user", description="Standard user role")
+    return Role(name="user", description="Standard user role", organization="UADE")
 
 
 # -------------------------------
@@ -82,3 +83,26 @@ def expired_token():
         roles=["admin"],
         email="alice@example.com",
     )
+
+
+# -------------------------------
+# Service Fixtures for Mocking
+# -------------------------------
+@pytest.fixture
+def mock_role_service(role_admin):
+    """Mock role_service to return roles for organization tests."""
+    mock_service = MagicMock()
+    mock_service.get_roles_by_organization.return_value = [role_admin]
+    return mock_service
+
+
+@pytest.fixture
+def patch_role_service(mock_role_service):
+    """Patch the global role_service and user_role_service in user_service module."""
+    # Mock user_role_service to handle add_roles_to_user calls
+    mock_user_role_service = MagicMock()
+    mock_user_role_service.add_roles_to_user.return_value = 1  # Return 1 to indicate role was added
+    
+    with patch('app.domain.services.user_service.role_service', mock_role_service), \
+         patch('app.domain.services.user_service.user_role_service', mock_user_role_service):
+        yield mock_role_service
