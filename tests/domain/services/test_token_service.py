@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 from app.domain.services.token_service import TokenService
 from app.domain.entities.token import Token
 from app.domain.entities.client_credentials import ClientCredentials
+from app.domain.entities.roles import Role
 from app.config.settings import settings
 
 
@@ -12,9 +13,12 @@ from app.config.settings import settings
 async def test_generate_token_success():
     user_service = AsyncMock()
     user_service.get_user.return_value = "uid123"
+    user_service.get_user_roles.return_value = [
+        Role(name="admin", description="Admin role", organization="org1")
+    ]
 
     service = TokenService(user_service)
-    creds = ClientCredentials(username="alice@example.com", password="af94320j!#!", roles=["admin"])
+    creds = ClientCredentials(username="alice@example.com", password="af94320j!#!")
 
     token = await service.generate_token(creds)
 
