@@ -23,7 +23,10 @@ class Settings(BaseSettings):
     MONGO_URI: str
     MONGO_DB_NAME: str
     ROLES_COLLECTION_NAME: str = "roles"
+    USER_ROLES_COLLECTION_NAME: str = "user_roles"
     LOGIN_HISTORY_LIMIT: int = 5
+    SUPER_ADMIN_ROLES: list[str] = ["super_admin_read", "super_admin_write"]
+    ADMIN_ROLES: list[str] = ["admin_read", "admin_write"]
     model_config = SettingsConfigDict(env_file=os.path.join(os.path.dirname(__file__), ".env"), extra="ignore")
 
     @property
