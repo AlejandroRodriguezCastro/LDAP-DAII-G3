@@ -58,44 +58,104 @@ class TokenService:
         logger.info("Token refreshed:", refreshed_token=refreshed_token)
         return refreshed_token
     
+    def _validate_token_claims(self, exp: int, nbf: int, iat: int) -> bool:
+        """
+        Validates token time-based claims (expiration, not-before, issued-at).
+        
+        Args:
+            exp: Token expiration timestamp
+            nbf: Token not-before timestamp
+            iat: Token issued-at timestamp
+            
+        Returns:
+            bool: True if all claims are valid, False otherwise
+        """
+        current_time = int(datetime.now(timezone.utc).timestamp())
+        
+        if exp < current_time:
+            logger.warning("Token has expired", exp=exp, current_time=current_time)
+            return False
+            
+        if nbf > current_time:
+            logger.warning("Token not yet valid", nbf=nbf, current_time=current_time)
+            return False
+            
+        if iat > current_time:
+            logger.warning("Token issued in the future", iat=iat, current_time=current_time)
+            return False
+            
+        return True
+
+    def _validate_jwt_signature(self, jwt_token: str) -> dict:
+        """
+        Validates JWT signature and decodes the token.
+        
+        Args:
+            jwt_token: JWT token string to validate
+            
+        Returns:
+            dict: Decoded JWT payload
+            
+        Raises:
+            jwt.ExpiredSignatureError: If token has expired
+            jwt.InvalidTokenError: If token signature is invalid
+        """
+        logger.info("Validating JWT signature", jwt_token=jwt_token[:50] + "...")
+        payload = TokenValidationRequest(jwt_token=jwt_token).decode_jwt()
+        logger.info("JWT signature valid", payload=payload)
+        return payload
+
     def validate_token(self, token: Token = None, jwt_token: str = None) -> bool:
         """
         Validates a token. You can pass either a Token object (will check claims only),
         or a JWT string (will verify signature and claims).
+        
+        Args:
+            token: Token object to validate claims only
+            jwt_token: JWT string to validate signature and claims
+            
+        Returns:
+            bool: True if token is valid, False otherwise
         """
-        logger.info("Validating token:", token=token, jwt_token=jwt_token)
-        current_time = datetime.now(timezone.utc).timestamp()
+        logger.info("Starting token validation")
+        
+        if not token and not jwt_token:
+            logger.error("No token or jwt_token provided for validation")
+            return False
+        
         try:
             if jwt_token:
                 # Validate JWT signature and claims
-                payload = TokenValidationRequest(jwt_token=jwt_token).decode_jwt()
-                logger.info("JWT signature and claims valid", payload=payload)
-                return True
+                payload = self._validate_jwt_signature(jwt_token)
+                logger.debug("Decoded JWT payload", 
+                           exp=payload.get('exp'), 
+                           nbf=payload.get('nbf'), 
+                           iat=payload.get('iat'))
+                
+                is_valid = self._validate_token_claims(
+                    exp=payload.get('exp'),
+                    nbf=payload.get('nbf'),
+                    iat=payload.get('iat')
+                )
+                logger.info("JWT token validation complete", is_valid=is_valid)
+                return is_valid
+                
             elif token:
-                # Validate claims only (no signature)
-                if token.exp < current_time:
-                    logger.warning("Token has expired:", exp=token.exp, current_time=current_time)
-                    return False
-                if hasattr(token, 'nbf') and token.nbf > current_time:
-                    logger.warning("Token not yet valid:", nbf=token.nbf, current_time=current_time)
-                    return False
-                if hasattr(token, 'iat') and token.iat > current_time:
-                    logger.warning("Token issued in the future:", iat=token.iat, current_time=current_time)
-                    return False
-                logger.info("Token validation result:", is_valid=True)
-                return True
-            else:
-                logger.error("No token or jwt_token provided for validation")
-                return False
+                # Validate claims only (no signature verification)
+                is_valid = self._validate_token_claims(
+                    exp=token.exp,
+                    nbf=token.nbf,
+                    iat=token.iat
+                )
+                logger.info("Token validation complete", is_valid=is_valid)
+                return is_valid
+                
         except jwt.ExpiredSignatureError:
             logger.warning("JWT token has expired")
             return False
         except jwt.InvalidTokenError as e:
-            logger.warning(f"JWT token is invalid: {e}")
+            logger.warning("JWT token is invalid", error=str(e))
             return False
-        except jwt.ExpiredSignatureError:
-            logger.warning("JWT token has expired")
-            return False
-        except jwt.InvalidTokenError as e:
-            logger.warning(f"JWT token is invalid: {e}")
+        except Exception as e:
+            logger.error("Unexpected error during token validation", error=str(e))
             return False
