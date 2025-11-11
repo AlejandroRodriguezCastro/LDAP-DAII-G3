@@ -26,7 +26,7 @@ async def test_generate_token_success():
     assert token.sub == "uid123"
     assert token.email == "alice@example.com"
     assert "admin" in token.roles
-    user_service.get_user.assert_called_once_with(username="alice@example.com")
+    user_service.get_user.assert_called_once_with(user_mail="alice@example.com")
 
 
 def test_refresh_token_success():

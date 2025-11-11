@@ -333,3 +333,83 @@ class TestRolesEndpoints:
         result = await get_roles_by_organization("UADE")
         
         assert "roles" in result
+
+
+# ===== Additional endpoint tests for missing coverage =====
+
+class TestUserEndpointsAdditional:
+    @pytest.mark.asyncio
+    @patch('app.api.v1.users.user.get_ldap_port_instance')
+    @patch('app.api.v1.users.user.UserService')
+    async def test_get_users_by_organization(self, mock_service_class, mock_ldap, valid_user_data):
+        """Test GET /user/by-organization/{org_unit_name}"""
+        mock_ldap.return_value = AsyncMock(return_value=MagicMock())
+        mock_service = MagicMock()
+        mock_service_class.return_value = mock_service
+        
+        users = [User(**valid_user_data)]
+        mock_service.get_users_by_organization = AsyncMock(return_value=users)
+        
+        from app.api.v1.users.user import get_users_by_organization
+        result = await get_users_by_organization("UADE")
+        
+        assert len(result) == 1
+        assert result[0].organization == "UADE"
+
+    @pytest.mark.asyncio
+    @patch('app.api.v1.users.user.get_ldap_port_instance')
+    @patch('app.api.v1.users.user.UserService')
+    async def test_get_user_with_mail(self, mock_service_class, mock_ldap, valid_user_data):
+        """Test GET /user/get-user with user_mail"""
+        mock_ldap.return_value = AsyncMock(return_value=MagicMock())
+        mock_service = MagicMock()
+        mock_service_class.return_value = mock_service
+        
+        # Create mock LDAP user object with LDAP attributes
+        ldap_user = MagicMock()
+        ldap_user.get = MagicMock(side_effect=lambda key, default="": {
+            "uid": "alice",
+            "mail": "alice@example.com",
+            "cn": "Alice Wonderland",
+            "sn": "Wonderland",
+            "telephoneNumber": "123456789",
+            "ou": "UADE"
+        }.get(key, default))
+        
+        mock_service.get_user = AsyncMock(return_value=ldap_user)
+        mock_service.get_user_roles = AsyncMock(return_value=[])
+        
+        from app.api.v1.users.user import get_user
+        result = await get_user(user_mail="alice@example.com")
+        
+        assert result.mail == "alice@example.com"
+
+    @pytest.mark.asyncio
+    @patch('app.api.v1.users.user.get_ldap_port_instance')
+    @patch('app.api.v1.users.user.UserService')
+    async def test_get_user_with_roles(self, mock_service_class, mock_ldap, valid_user_data):
+        """Test GET /user/get-user with roles normalization"""
+        mock_ldap.return_value = AsyncMock(return_value=MagicMock())
+        mock_service = MagicMock()
+        mock_service_class.return_value = mock_service
+        
+        # Create mock LDAP user object with LDAP attributes
+        ldap_user = MagicMock()
+        ldap_user.get = MagicMock(side_effect=lambda key, default="": {
+            "uid": "alice",
+            "mail": "alice@example.com",
+            "cn": "Alice Wonderland",
+            "sn": "Wonderland",
+            "telephoneNumber": "123456789",
+            "ou": "UADE"
+        }.get(key, default))
+        
+        # Mock role objects returned from service
+        mock_role = Role(name="admin", description="Admin", organization="UADE")
+        mock_service.get_user = AsyncMock(return_value=ldap_user)
+        mock_service.get_user_roles = AsyncMock(return_value=[mock_role])
+        
+        from app.api.v1.users.user import get_user
+        result = await get_user(user_mail="alice@example.com")
+        
+        assert len(result.roles) == 1
