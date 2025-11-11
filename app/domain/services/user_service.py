@@ -103,12 +103,20 @@ class UserService:
     async def get_user_roles(self, user_mail: str) -> list[str]:
         logger.info("Fetching roles for user by mail:", user_mail=user_mail)
         
-        # First, retrieve the username from the mail
-        username = await self.get_user(user_mail)
-        logger.debug("Retrieved username for mail:", mail=user_mail, username=username)
+        # First, retrieve the user data from the mail
+        user_data = await self.get_user(user_mail=user_mail)
+        logger.debug("Retrieved user data for mail:", mail=user_mail, user_data=user_data)
+        
+        if not user_data:
+            logger.info("Could not retrieve user data for mail:", user_mail=user_mail)
+            raise UserNotFoundError(user_mail)
+        
+        # Extract username from user_data
+        username = user_data['uid'].value if 'uid' in user_data and user_data['uid'].value else None
+        logger.debug("Extracted username from user data:", username=username)
         
         if not username:
-            logger.info("Could not retrieve username for mail:", user_mail=user_mail)
+            logger.info("Could not extract username from user data:", user_mail=user_mail)
             raise UserNotFoundError(user_mail)
         
         # Then, retrieve the roles for that user
@@ -127,16 +135,43 @@ class UserService:
             logger.info("No roles found for user:", username=username)
             return []
 
-    async def get_user(self, user_mail: str) -> str:
-        logger.info("Fetching user from LDAP by mail:", user_mail=user_mail)
-        user_data = await self.ldap_port.get_user_by_attribute("mail", user_mail)
+    async def get_user(self, user_mail: str = None, user_id: str = None, username: str = None):
+        """Fetch user from LDAP by mail, user_id, or username.
+        
+        Args:
+            user_mail: User's email address
+            user_id: User's ID (alias for username)
+            username: User's username (uid attribute in LDAP)
+        
+        Returns:
+            User data dictionary/object from LDAP
+        
+        Raises:
+            UserNotFoundError: If user not found
+        """
+        # Determine which attribute to search by
+        search_value = None
+        search_attribute = None
+        
+        if username or user_id:
+            # Prefer username/user_id over mail
+            search_value = username or user_id
+            search_attribute = "uid"
+        elif user_mail:
+            search_value = user_mail
+            search_attribute = "mail"
+        else:
+            raise InvalidUserDataError("Either user_mail, user_id, or username must be provided")
+        
+        logger.info("Fetching user from LDAP", attribute=search_attribute, value=search_value)
+        user_data = await self.ldap_port.get_user_by_attribute(search_attribute, search_value)
         # Normalise shapes: LDAPPort may return a list or a single entry
         user_data = self._ensure_single_entry(user_data)
         if not user_data:
-            logger.info("User not found for mail:", mail=user_mail)
-            raise UserNotFoundError(user_mail)
-        logger.info("User data found for mail:", mail=user_mail, user_data=user_data)
-        return user_data['uid'].value if 'uid' in user_data else None
+            logger.info("User not found", attribute=search_attribute, value=search_value)
+            raise UserNotFoundError(f"User not found with {search_attribute}={search_value}")
+        logger.info("User data found", attribute=search_attribute, value=search_value, user_data=user_data)
+        return user_data
     
     async def create_user(self, user: User) -> User:
         logger.info("Creating user in LDAP:", username=user.mail)
@@ -322,6 +357,91 @@ class UserService:
 
         return True
     
+    async def get_users_by_organization(self, org_unit_name: str) -> list[User]:
+        """Fetch all users belonging to a specific organization unit.
+        
+        Args:
+            org_unit_name: The organization unit name to filter by
+        
+        Returns:
+            List of User objects from the organization
+        
+        Raises:
+            UserNotFoundError: If no users found in organization
+        """
+        logger.info("Fetching users by organization:", organization=org_unit_name)
+        # Get all users from LDAP and filter by organization
+        all_users = await self.ldap_port.get_all_users()
+        logger.debug("All users fetched from LDAP:", count=len(all_users) if all_users else 0)
+        
+        # Filter users by organization unit
+        first_or_none = lambda v: v[0] if isinstance(v, list) and v else v or None
+        users_data = [user for user in all_users if first_or_none(user.get("ou")) == org_unit_name]
+        logger.debug("Users data fetched for organization:", organization=org_unit_name, users_data=users_data)
+        
+        if not users_data:
+            logger.info("No users found in organization:", organization=org_unit_name)
+            raise UserNotFoundError(f"No users found in organization: {org_unit_name}")
+        
+        # Normalize to list if single entry returned
+        if not isinstance(users_data, list):
+            users_data = [users_data]
+        
+        users = []
+        first_or_none = lambda v: v[0] if isinstance(v, list) and v else v or None
+        
+        for user in users_data:
+            username_val = first_or_none(user.get("uid"))
+            mail_val = first_or_none(user.get("mail"))
+            telephone_val = first_or_none(user.get("telephoneNumber"))
+            first_name_val = (
+                first_or_none(user.get("givenName"))
+                or (
+                    lambda cn, sn: " ".join(cn.split()[:-len(sn.split())]) if cn and sn and cn.endswith(sn) else cn
+                )(first_or_none(user.get("cn")), first_or_none(user.get("sn")))
+            )
+            last_name_val = first_or_none(user.get("sn"))
+            organization_val = first_or_none(user.get("ou", "Unknown"))
+
+            # Attempt to fetch role ids for this username from the user_roles collection
+            roles_for_user = []
+            try:
+                if username_val:
+                    user_roles_doc = user_role_service.non_relational_db_port.find_entry(
+                        user_role_service.collection, {"username": username_val}
+                    )
+                    logger.debug("Fetched user roles document for user", username=username_val, user_roles_doc=user_roles_doc)
+                    if user_roles_doc:
+                        role_ids = user_roles_doc.get("roles", []) or []
+                        try:
+                            # Resolve role ids to Role models
+                            roles_for_user = role_service.get_roles_by_ids(role_ids) if role_ids else []
+                            logger.debug("Resolved roles for user", username=username_val, roles=roles_for_user)
+                        except Exception as e:
+                            # If roles can't be resolved by ID, fall back to organization-based roles
+                            logger.debug("Could not resolve roles by ID for user, falling back to organization", username=username_val, role_ids=role_ids, error=str(e))
+                            try:
+                                if organization_val and organization_val != "Unknown":
+                                    roles_for_user = role_service.get_roles_by_organization(organization_val)
+                                    logger.debug("Resolved roles for user by organization", username=username_val, organization=organization_val, roles=roles_for_user)
+                            except Exception:
+                                logger.debug("Could not resolve roles by organization for user", username=username_val, organization=organization_val)
+            except Exception:
+                logger.exception("Error fetching user roles for user", username=username_val)
+
+            users.append(User(
+                username=username_val,
+                mail=mail_val,
+                telephone_number=telephone_val,
+                first_name=first_name_val,
+                last_name=last_name_val,
+                organization=organization_val,
+                roles=roles_for_user,
+                password="asd324ewrf!@#QWEqwe"  # Placeholder, not returned by LDAP
+            ))
+
+        return users
+
     async def get_last_logins(self, user_mail: str, limit: int = 5):
         logger.info("Fetching last login history for user:", mail=user_mail, limit=limit)
         user_dn = await self.ldap_port.get_user_by_attribute("mail", user_mail)

@@ -13,29 +13,74 @@ router = APIRouter(
 
 
 @router.get("/get-user", response_model=User)
-async def get_user(user_id: str | None = Query(default=None), username: str | None = Query(default=None)):
-    if user_id is None and username is None:
+async def get_user(user_id: str | None = Query(default=None), username: str | None = Query(default=None), user_mail: str | None = Query(default=None)):
+    if user_id is None and username is None and user_mail is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Either user_id or username query parameter is required"
+            detail="Either user_id, username or user_mail query parameter is required"
         )
     ldap_port_instance = await get_ldap_port_instance()
     logger.info("Using LDAPPort singleton instance:", instance=ldap_port_instance)
-    user_entity = UserService(ldap_port_instance)
-    if user_id:
-        logger.info("User to fetch by ID:", user=user_id)
-        user = user_entity.get_user(user_id)
-        logger.info("User fetched by ID:", user=user_id)
-    elif username:
-        logger.info("User to fetch by username:", username=username)
-        user = await user_entity.get_user(username)
-        logger.debug("Result from get_user_by_username:", user=user)
-        logger.info("User fetched by username:", username=username)
-    if user:
-        return user
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail="User not found"
+    user_service = UserService(ldap_port_instance)
+    user = await user_service.get_user(user_id=user_id, username=username, user_mail=user_mail)
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Build User object from LDAP data
+    def get_value(field):
+        """Helper to extract value from LDAP field (handles LDAP Attribute objects, dicts, and strings)"""
+        if field is None:
+            return None
+        if isinstance(field, str):
+            return field
+        # Handle LDAP Attribute objects - they may have a value property or be convertible to string
+        if hasattr(field, 'value'):
+            return field.value
+        # Handle cases where the object itself is the value when converted to string
+        field_str = str(field)
+        # Extract value from "uid: arodriguez" format
+        if ': ' in field_str:
+            return field_str.split(': ', 1)[1]
+        return field_str
+    
+    def safe_get(obj, key, default=None):
+        """Safely get attribute from LDAP Entry or dict-like object"""
+        try:
+            value = obj.get(key, default) if hasattr(obj, 'get') else getattr(obj, key, default)
+            return value if value else default
+        except Exception:
+            return default
+    
+    cn_value = get_value(safe_get(user, "cn", "")) or ""
+    sn_value = get_value(safe_get(user, "sn", "")) or ""
+    # Derive first name by removing last name from CN; fallback to first token of CN
+    if cn_value and sn_value and sn_value in cn_value:
+        if cn_value.endswith(sn_value):
+            first_name = cn_value[: len(cn_value) - len(sn_value)].strip().rstrip(",")
+        else:
+            first_name = cn_value.replace(sn_value, "").strip()
+    else:
+        first_name = cn_value.split()[0] if cn_value else ""
+
+    roles = await user_service.get_user_roles(user_mail=user_mail)
+    if roles:
+        roles = [role.name for role in roles]
+    else:
+        roles = []
+
+    return User(
+        username=get_value(safe_get(user, "uid", "")),
+        mail=get_value(safe_get(user, "mail", "")),
+        telephone_number=get_value(safe_get(user, "telephoneNumber", "")),
+        first_name=first_name,
+        last_name=get_value(safe_get(user, "sn", "")),
+        organization=get_value(safe_get(user, "ou", "")),
+        roles=roles,
+        password="asd324ewrf!@#QWEqwe"  # Placeholder
     )
 
 @router.post("/", response_model=User, status_code=status.HTTP_201_CREATED)
@@ -52,6 +97,14 @@ async def delete_user(user_mail: str):
     ldap_port_instance = await get_ldap_port_instance()
     user_service = UserService(ldap_port_instance)
     await user_service.delete_user(user_mail)
+
+@router.get("/by-organization/{org_unit_name}", response_model=list[User])
+async def get_users_by_organization(org_unit_name: str):
+    logger.info("Received request to fetch users by organization:", org_unit_name=org_unit_name)
+    ldap_port_instance = await get_ldap_port_instance()
+    user_service = UserService(ldap_port_instance)
+    users = await user_service.get_users_by_organization(org_unit_name)
+    return users
 
 @router.put("/{user_mail}", response_model=User)
 async def update_user(user_mail: str, user: User):

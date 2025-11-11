@@ -1,5 +1,5 @@
 import pytest
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Query
 from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock, MagicMock, patch
 from app.api.v1.users.user import router as user_router
@@ -45,30 +45,57 @@ class TestUserEndpoints:
     @patch('app.api.v1.users.user.UserService')
     async def test_get_user_by_id(self, mock_service_class, mock_ldap, valid_user_data):
         """Test GET /user/get-user with user_id"""
-        mock_ldap.return_value = MagicMock()
+        mock_ldap.return_value = AsyncMock(return_value=MagicMock())
         mock_service = MagicMock()
         mock_service_class.return_value = mock_service
         
-        user = User(**valid_user_data)
-        mock_service.get_user.return_value = user
+        # Create mock LDAP user object with LDAP attributes
+        ldap_user = MagicMock()
+        ldap_user.get = MagicMock(side_effect=lambda key, default="": {
+            "uid": "alice",
+            "mail": "alice@example.com",
+            "cn": "Alice Wonderland",
+            "sn": "Wonderland",
+            "telephoneNumber": "123456789",
+            "ou": "UADE"
+        }.get(key, default))
+        
+        mock_service.get_user = AsyncMock(return_value=ldap_user)
+        mock_service.get_user_roles = AsyncMock(return_value=[])
         
         from app.api.v1.users.user import get_user
         result = await get_user(user_id="alice")
         
         assert result.username == "alice"
-        mock_service.get_user.assert_called_once_with("alice")
+        # When calling the function directly, verify the service was called with the correct parameters
+        call_args = mock_service.get_user.call_args
+        assert call_args[1]['user_id'] == "alice"
+        # username and user_mail should have default=None
+        assert hasattr(call_args[1]['username'], 'default') and call_args[1]['username'].default is None
+        assert hasattr(call_args[1]['user_mail'], 'default') and call_args[1]['user_mail'].default is None
 
     @pytest.mark.asyncio
     @patch('app.api.v1.users.user.get_ldap_port_instance')
     @patch('app.api.v1.users.user.UserService')
     async def test_get_user_by_username(self, mock_service_class, mock_ldap, valid_user_data):
         """Test GET /user/get-user with username"""
-        mock_ldap.return_value = MagicMock()
+        mock_ldap.return_value = AsyncMock(return_value=MagicMock())
         mock_service = MagicMock()
         mock_service_class.return_value = mock_service
         
-        user = User(**valid_user_data)
-        mock_service.get_user.return_value = user
+        # Create mock LDAP user object with LDAP attributes
+        ldap_user = MagicMock()
+        ldap_user.get = MagicMock(side_effect=lambda key, default="": {
+            "uid": "alice",
+            "mail": "alice@example.com",
+            "cn": "Alice Wonderland",
+            "sn": "Wonderland",
+            "telephoneNumber": "123456789",
+            "ou": "UADE"
+        }.get(key, default))
+        
+        mock_service.get_user = AsyncMock(return_value=ldap_user)
+        mock_service.get_user_roles = AsyncMock(return_value=[])
         
         from app.api.v1.users.user import get_user
         result = await get_user(username="alice")
@@ -80,11 +107,11 @@ class TestUserEndpoints:
     @patch('app.api.v1.users.user.UserService')
     async def test_get_user_no_params(self, mock_service_class, mock_ldap):
         """Test GET /user/get-user without parameters raises 400"""
-        mock_ldap.return_value = MagicMock()
+        mock_ldap.return_value = AsyncMock(return_value=MagicMock())
         
         from app.api.v1.users.user import get_user
         with pytest.raises(HTTPException) as exc_info:
-            await get_user(user_id=None, username=None)
+            await get_user(user_id=None, username=None, user_mail=None)
         
         assert exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -93,10 +120,10 @@ class TestUserEndpoints:
     @patch('app.api.v1.users.user.UserService')
     async def test_get_user_not_found(self, mock_service_class, mock_ldap):
         """Test GET /user/get-user when user not found raises 404"""
-        mock_ldap.return_value = MagicMock()
+        mock_ldap.return_value = AsyncMock(return_value=MagicMock())
         mock_service = MagicMock()
         mock_service_class.return_value = mock_service
-        mock_service.get_user.return_value = None
+        mock_service.get_user = AsyncMock(return_value=None)
         
         from app.api.v1.users.user import get_user
         with pytest.raises(HTTPException) as exc_info:
@@ -109,7 +136,7 @@ class TestUserEndpoints:
     @patch('app.api.v1.users.user.UserService')
     async def test_create_user(self, mock_service_class, mock_ldap, valid_user_data):
         """Test POST /user"""
-        mock_ldap.return_value = MagicMock()
+        mock_ldap.return_value = AsyncMock(return_value=MagicMock())
         mock_service = MagicMock()
         mock_service_class.return_value = mock_service
         
@@ -126,7 +153,7 @@ class TestUserEndpoints:
     @patch('app.api.v1.users.user.UserService')
     async def test_delete_user(self, mock_service_class, mock_ldap):
         """Test DELETE /user/{user_mail}"""
-        mock_ldap.return_value = MagicMock()
+        mock_ldap.return_value = AsyncMock(return_value=MagicMock())
         mock_service = MagicMock()
         mock_service_class.return_value = mock_service
         mock_service.delete_user = AsyncMock()
@@ -141,7 +168,7 @@ class TestUserEndpoints:
     @patch('app.api.v1.users.user.UserService')
     async def test_update_user(self, mock_service_class, mock_ldap, valid_user_data):
         """Test PUT /user/{user_mail}"""
-        mock_ldap.return_value = MagicMock()
+        mock_ldap.return_value = AsyncMock(return_value=MagicMock())
         mock_service = MagicMock()
         mock_service_class.return_value = mock_service
         
@@ -158,7 +185,7 @@ class TestUserEndpoints:
     @patch('app.api.v1.users.user.UserService')
     async def test_get_all_users(self, mock_service_class, mock_ldap, valid_user_data):
         """Test GET /user/all"""
-        mock_ldap.return_value = MagicMock()
+        mock_ldap.return_value = AsyncMock(return_value=MagicMock())
         mock_service = MagicMock()
         mock_service_class.return_value = mock_service
         
@@ -175,7 +202,7 @@ class TestUserEndpoints:
     @patch('app.api.v1.users.user.UserService')
     async def test_change_password(self, mock_service_class, mock_ldap):
         """Test POST /user/change-password"""
-        mock_ldap.return_value = MagicMock()
+        mock_ldap.return_value = AsyncMock(return_value=MagicMock())
         mock_service = MagicMock()
         mock_service_class.return_value = mock_service
         mock_service.change_password = AsyncMock(return_value=True)
@@ -190,7 +217,7 @@ class TestUserEndpoints:
     @patch('app.api.v1.users.user.UserService')
     async def test_change_password_failure(self, mock_service_class, mock_ldap):
         """Test POST /user/change-password failure"""
-        mock_ldap.return_value = MagicMock()
+        mock_ldap.return_value = AsyncMock(return_value=MagicMock())
         mock_service = MagicMock()
         mock_service_class.return_value = mock_service
         mock_service.change_password = AsyncMock(return_value=False)

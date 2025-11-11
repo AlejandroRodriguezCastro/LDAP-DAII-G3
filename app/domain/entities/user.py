@@ -44,6 +44,9 @@ class User(BaseModel):
     @classmethod
     def validate_telephone_number(cls, v):
         import re
+        # Allow empty strings (when telephone number is not provided)
+        if not v or v.strip() == "":
+            return ""
         # Accepts E.164 (+1234567890), or local (10-15 digits, optional dashes/spaces)
         pattern = r"^(\+\d{10,15}|\d{10,15}|(\+\d{1,3}[- ]?)?\d{6,14})$"
         if not re.match(pattern, v.replace(" ", "").replace("-", "")):

@@ -196,7 +196,7 @@ def test_user_service_get_user_and_create_delete(patch_role_service):
     svc = UserService(ldap)
 
     with pytest.raises(UserNotFoundError):
-        run(svc.get_user('missing@example.com'))
+        run(svc.get_user(user_mail='missing@example.com'))
 
     # create user flow
     ldap.organizations.add('UADE')
