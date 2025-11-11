@@ -9,6 +9,7 @@ from app.handlers.errors.user_exception_handlers import (
     failure_user_deletion_handler,
     user_locked_down_handler,
     user_invalid_credentials_handler,
+    failure_user_modification_handler,
     UserNotFoundError,
     UserAlreadyExistsError,
     InvalidUserDataError,
@@ -16,7 +17,8 @@ from app.handlers.errors.user_exception_handlers import (
     FailureUserCreationError,
     FailureUserDeletionError,
     UserLockedDownError,
-    UserInvalidCredentialsError
+    UserInvalidCredentialsError,
+    FailureUserModificationError
 )
 
 from app.handlers.errors.role_exception_handlers import (
@@ -61,6 +63,7 @@ def register_exception_handlers(app: FastAPI):
     app.add_exception_handler(FailureUserDeletionError, failure_user_deletion_handler)
     app.add_exception_handler(UserLockedDownError, user_locked_down_handler)
     app.add_exception_handler(UserInvalidCredentialsError, user_invalid_credentials_handler)
+    app.add_exception_handler(FailureUserModificationError, failure_user_modification_handler)
     
     logger.info("Registering role exception handlers with FastAPI app.")
     app.add_exception_handler(RoleNotFoundError, role_not_found_exception_handler)
