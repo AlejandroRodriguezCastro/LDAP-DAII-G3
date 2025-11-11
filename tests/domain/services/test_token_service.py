@@ -12,7 +12,7 @@ from app.config.settings import settings
 @pytest.mark.asyncio
 async def test_generate_token_success():
     user_service = AsyncMock()
-    user_service.get_user.return_value = "uid123"
+    user_service.get_user.return_value = {"uid": "uid123"}
     user_service.get_user_roles.return_value = [
         Role(name="admin", description="Admin role", organization="org1")
     ]
@@ -26,7 +26,7 @@ async def test_generate_token_success():
     assert token.sub == "uid123"
     assert token.email == "alice@example.com"
     assert "admin" in token.roles
-    user_service.get_user.assert_called_once_with("alice@example.com")
+    user_service.get_user.assert_called_once_with(username="alice@example.com")
 
 
 def test_refresh_token_success():

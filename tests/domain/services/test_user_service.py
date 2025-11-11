@@ -20,9 +20,9 @@ async def test_get_user_success(mocker, valid_user):
     ldap_port.get_user_by_attribute.return_value = {"uid": mocker.MagicMock(value="alice")}
     service = UserService(ldap_port)
 
-    result = await service.get_user(valid_user.mail)
+    result = await service.get_user(user_mail=valid_user.mail)
 
-    assert result == "alice"
+    assert result == {"uid": mocker.MagicMock(value="alice")} or result.get("uid").value == "alice"
     ldap_port.get_user_by_attribute.assert_called_once_with("mail", valid_user.mail)
 
 
@@ -33,7 +33,7 @@ async def test_get_user_not_found(valid_user):
     service = UserService(ldap_port)
 
     with pytest.raises(UserNotFoundError):
-        await service.get_user(valid_user.mail)
+        await service.get_user(user_mail=valid_user.mail)
 
 @pytest.mark.asyncio
 async def test_create_user_success(patch_role_service, valid_user):
