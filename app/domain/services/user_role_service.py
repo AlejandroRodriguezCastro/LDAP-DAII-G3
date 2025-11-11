@@ -150,3 +150,19 @@ class UserRoleService:
                 total_added += 1
 
         return total_added
+
+    def delete_user_roles_by_username(self, username: str) -> int:
+        """Delete all roles associated with a given username."""
+        if not username:
+            raise InvalidRoleDataError("Username is required for deletion")
+
+        deleted_count = self.non_relational_db_port.delete_many(
+            self.collection,
+            {"username": username}
+        )
+        if deleted_count == 0:
+            logger.warning("No user roles found to delete for username", username=username)
+        else:
+            logger.info("Deleted user roles for username", username=username, deleted_count=deleted_count)
+
+        return deleted_count
