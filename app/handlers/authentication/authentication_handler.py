@@ -23,12 +23,14 @@ def _extract_token_from_auth_header(request: Request) -> str:
 def _decode_roles_from_jwt(token_str: str) -> list:
     try:
         tv = TokenValidationRequest(jwt_token=token_str)
+        logger.debug("Decoding JWT to extract roles claim")
         payload = tv.decode_jwt()
+        logger.debug("Token validation successful", token_sub=payload.get("sub"))
         roles = payload.get("roles", [])
         return roles or []
-    except Exception:
-        logger.warning("Failed to decode JWT")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    except Exception as e:
+        logger.warning("Failed to decode or validate JWT", error=str(e))
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
 
 
 async def _require_roles(request: Request, allowed_roles: list):

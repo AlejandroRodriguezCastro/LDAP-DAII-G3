@@ -10,7 +10,7 @@ class RoleNotFoundError(Exception):
         elif role_id:
             self.message = f"Role with ID '{role_id}' not found."
         else:
-            self.message = "Role not found."
+            self.message = "Role/s not found."
         super().__init__(self.message)
         
 class RoleAlreadyExistsError(Exception):
@@ -49,18 +49,9 @@ class UnauthorizedRoleError(Exception):
         super().__init__(self.message)
 
 def role_not_found_exception_handler(request: Request, exc: RoleNotFoundError):
-    # Normalize the message so callers always receive a "Role with ID '<x>' not found." style
-    original = getattr(exc, "message", None) or str(exc)
-    # If the message already looks like the desired format, keep it as-is
-    if isinstance(original, str) and (original.startswith("Role with ID") or original.startswith("Role with id") or original.startswith("Role with name") ): 
-        formatted = original
-    else:
-        # Wrap the original message as the identifier for clarity
-        formatted = f"Role with ID '{original}' not found."
-
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND,
-        content={"message": formatted}
+        content={"message": exc.message}
     )
     
 def role_already_exists_exception_handler(request: Request, exc: RoleAlreadyExistsError):
