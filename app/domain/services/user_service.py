@@ -10,7 +10,8 @@ from app.handlers.errors.user_exception_handlers import (
     FailureUserCreationError,
     FailureUserDeletionError,
     UserLockedDownError,
-    UserInvalidCredentialsError
+    UserInvalidCredentialsError,
+    FailureUserModificationError
 )
 from app.domain.services.role_service import RoleService
 from app.domain.services.user_role_service import UserRoleService
@@ -20,8 +21,8 @@ from app.config.mongo_settings import connect_db
 
 logger = structlog.get_logger()
 
-role_service = RoleService(NonRelationalDBPort(non_relational_db=connect_db(), db_name="ldap-roles"), collection_name=settings.ROLES_COLLECTION_NAME)
-user_role_service = UserRoleService(NonRelationalDBPort(non_relational_db=connect_db(), db_name="ldap-roles"), collection_name=settings.USER_ROLES_COLLECTION_NAME)
+role_service = RoleService(NonRelationalDBPort(non_relational_db=connect_db(), db_name=settings.MONGO_DB_NAME), collection_name=settings.ROLES_COLLECTION_NAME)
+user_role_service = UserRoleService(NonRelationalDBPort(non_relational_db=connect_db(), db_name=settings.MONGO_DB_NAME), collection_name=settings.USER_ROLES_COLLECTION_NAME)
 
 class UserService:
     def __init__(self, ldap_port: LDAPPort):
@@ -243,6 +244,9 @@ class UserService:
         check_email = await self.ldap_port.get_user_by_attribute("mail", f"{user_mail}")
         logger.info("Mail existence check result:", exists=check_email, mail=user_mail)
         
+        # Normalize shapes: LDAPPort may return a list or a single entry
+        check_email = self._ensure_single_entry(check_email)
+        
         if not check_email:
             logger.info("Email does not exist. User not found for deletion.")
             raise UserNotFoundError(user_mail)
@@ -251,6 +255,12 @@ class UserService:
         if not deleted:
             logger.error("Failed to delete user in LDAP:", mail=user_mail)
             raise FailureUserDeletionError("Failed to delete user in LDAP.")
+        logger.info("User deleted from LDAP successfully:", mail=user_mail)
+        
+        # Extract uid from check_email, handling both string and object values
+        uid_value = check_email['uid'].value if hasattr(check_email['uid'], 'value') else check_email['uid']
+        logger.info("Deleting user roles associated with user:", username=uid_value)
+        user_role_service.delete_user_roles_by_username(uid_value)
 
     async def authenticate_user(self, user_dn: str, password: str, client_ip: str = None) -> bool:
         logger.info("Searching user by mail for authentication", mail=user_dn)
@@ -319,15 +329,42 @@ class UserService:
             logger.info("User DN not found in record. Cannot modify user.")
             raise InvalidUserDataError("User DN not found in record.")
         
+        # Extract roles from new_data if provided
+        logger.info("Extracting new roles from modification data if present.")
+        logger.debug("New data before extracting roles:", new_data=new_data)
+        logger.debug("Type of new_data:", type_new_data=type(new_data))
+        logger.debug("Type of new_data.roles if applicable:", type_new_data_roles=type(new_data.roles) if hasattr(new_data, 'roles') else 'N/A')
+        
+        # Extract roles: handle User objects by accessing roles attribute, or dicts by popping the key
+        if isinstance(new_data, dict):
+            new_roles = new_data.pop('roles', None)
+        elif hasattr(new_data, 'roles'):
+            new_roles = new_data.roles
+        else:
+            new_roles = None
+        
+        logger.info("Extracted new roles for modification:", username=user_exists, new_roles=new_roles)
         modified = await self.ldap_port.modify_user_data(user_dn, new_data)
         if not modified:
             logger.error("Failed to modify user data in LDAP:", mail=user_mail)
             raise FailureUserCreationError("Failed to modify user data in LDAP.")
 
-        # Ensure we return a User instance that matches the API response_model.
-        # The incoming `new_data` is expected to be a User model from the route,
-        # but make sure the username matches the one in LDAP (uid).
-
+        # Handle user roles modification if provided
+        if new_roles is not None:
+            logger.info("Modifying user roles:", username=user_exists, roles=new_roles)
+            # Delete existing user roles
+            user_role_service.delete_user_roles_by_username(user_exists)
+            logger.info("Deleted existing user roles:", username=user_exists)
+            
+            # Add new roles if provided
+            if new_roles:
+                added = user_role_service.add_roles_to_user(user_exists, new_roles)
+                logger.info("Added new roles to user:", username=user_exists, roles_added=added)
+        
+        if new_roles is not None and not added:
+            logger.info("Failed to add new roles to user. User modification incomplete.", username=user_exists, roles=new_roles)
+            raise FailureUserModificationError("Failed to modify user roles.")
+        
         if hasattr(new_data, 'username') and user_exists:
             new_data.username = user_exists
 

@@ -66,6 +66,12 @@ class FailureUserCreationError(Exception):
             self.message = base
         super().__init__(self.message)
         
+class FailureUserModificationError(Exception):
+    """Raised when user modification fails due to an internal error."""
+    def __init__(self, details: str = None):
+        self.message = f"Failed to modify user. {details}" if details else "Failed to modify user."
+        super().__init__(self.message)
+        
 class FailureUserDeletionError(Exception):
     """Raised when user deletion fails due to an internal error."""
     def __init__(self, details: str = None):
@@ -117,5 +123,11 @@ def invalid_user_data_handler(request: Request, exc: InvalidUserDataError):
 def unauthorized_user_handler(request: Request, exc: UnauthorizedUserError):
     return JSONResponse(
         status_code=status.HTTP_401_UNAUTHORIZED,
+        content={"detail": str(exc)},
+    )
+    
+def failure_user_modification_handler(request: Request, exc: FailureUserModificationError):
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": str(exc)},
     )

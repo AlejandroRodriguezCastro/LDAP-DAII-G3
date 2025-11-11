@@ -24,9 +24,11 @@ class TokenService:
         # Extract role names from Role objects
         roles_names = [role.name for role in roles_objects] if roles_objects else []
         
-        # Get user by username to get the uid
-        user_data = await self.user_service.get_user(username=client_credentials.username)
-        uid = user_data.get('uid').value if isinstance(user_data.get('uid'), object) and hasattr(user_data.get('uid'), 'value') else user_data.get('uid')
+        # Get user by email to get the uid (client_credentials.username is an email)
+        user_data = await self.user_service.get_user(user_mail=client_credentials.username)
+        # Handle both LDAP entry objects (with .value attribute) and dict mocks (with direct string values)
+        uid_obj = user_data['uid'] if 'uid' in user_data else None
+        uid = uid_obj.value if hasattr(uid_obj, 'value') else uid_obj
         
         token = Token(
             sub=uid,
