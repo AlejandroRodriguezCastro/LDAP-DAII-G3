@@ -35,7 +35,7 @@ class Token(BaseModel):
 
     def decode_jwt(self, algorithms: List[str] = ["HS256"]) -> dict:
         return jwt.decode(self.jwt_token, key=settings.SECRET_KEY, audience="ldap.com", issuer="auth_server",
-                          options={"verify_signature": False, "require": ["exp", "nbf", "iat", "aud", "iss"]},
+                          options={"verify_signature": True, "verify_exp": True, "require": ["exp", "nbf", "iat", "aud", "iss", "sub"]},
                           algorithms=algorithms)
 
 class TokenValidationRequest(BaseModel):
@@ -43,5 +43,5 @@ class TokenValidationRequest(BaseModel):
 
     def decode_jwt(self, algorithms: List[str] = ["HS256"]) -> dict:
         return jwt.decode(self.jwt_token, key=settings.SECRET_KEY, audience="ldap.com", issuer="auth_server",
-                          options={"verify_signature": False, "require": ["exp", "nbf", "iat", "aud", "iss"]},
+                          options={"verify_signature": True, "verify_exp": True, "require": ["exp", "nbf", "iat", "aud", "iss", "sub"]},
                           algorithms=algorithms)

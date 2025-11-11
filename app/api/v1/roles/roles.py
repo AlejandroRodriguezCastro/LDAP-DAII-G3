@@ -14,7 +14,7 @@ router = APIRouter(
     tags=["roles"]
 )
 
-role_service = RoleService(NonRelationalDBPort(non_relational_db=connect_db(), db_name="ldap-roles"), collection_name=settings.ROLES_COLLECTION_NAME)
+role_service = RoleService(NonRelationalDBPort(non_relational_db=connect_db(), db_name=settings.MONGO_DB_NAME), collection_name=settings.ROLES_COLLECTION_NAME)
 
 @router.post("/", response_model=dict)
 async def create_role(role: Role):

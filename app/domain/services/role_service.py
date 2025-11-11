@@ -52,7 +52,7 @@ class RoleService:
             roles.append(Role(**role_data))
 
         if not roles:
-            raise RoleNotFoundError("No roles found.")
+            raise RoleNotFoundError()
 
         return roles
 

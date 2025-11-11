@@ -100,7 +100,7 @@ class TestDecodeRolesFromJwt:
             _decode_roles_from_jwt("invalid_token")
         
         assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
-        assert "Invalid token" in exc_info.value.detail
+        assert "Invalid or expired token" in exc_info.value.detail
 
     @patch('app.handlers.authentication.authentication_handler.TokenValidationRequest')
     def test_decode_roles_none_value(self, mock_token_class):
