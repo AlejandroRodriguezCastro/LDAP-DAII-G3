@@ -66,11 +66,29 @@ async def get_user(user_id: str | None = Query(default=None), username: str | No
     else:
         first_name = cn_value.split()[0] if cn_value else ""
 
+    # Determine organisation value early so we can populate Role objects if needed
+    organization_val = get_value(safe_get(user, "ou", "")) or ""
+
     roles = await user_service.get_user_roles(user_mail=user_mail)
+    # Normalize roles into Role-compatible dicts/instances so Pydantic can validate
+    normalized_roles = []
     if roles:
-        roles = [role.name for role in roles]
-    else:
-        roles = []
+        for role in roles:
+            # If already a Role model instance, keep as-is
+            if hasattr(role, "model_dump"):
+                normalized_roles.append(role)
+            # If it's a dict from DB/service, ensure required 'organization' field exists
+            elif isinstance(role, dict):
+                if not role.get("organization"):
+                    role["organization"] = organization_val
+                normalized_roles.append(role)
+            # If it's just a role name (string), create a minimal Role dict
+            elif isinstance(role, str):
+                normalized_roles.append({"name": role, "organization": organization_val})
+            else:
+                # Fallback: coerce to string name
+                normalized_roles.append({"name": str(role), "organization": organization_val})
+    roles = normalized_roles
 
     return User(
         username=get_value(safe_get(user, "uid", "")),
