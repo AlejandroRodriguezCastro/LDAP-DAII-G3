@@ -23,8 +23,13 @@ class TokenService:
         roles_objects = await self.user_service.get_user_roles(client_credentials.username)
         # Extract role names from Role objects
         roles_names = [role.name for role in roles_objects] if roles_objects else []
+        
+        # Get user by username to get the uid
+        user_data = await self.user_service.get_user(username=client_credentials.username)
+        uid = user_data.get('uid').value if isinstance(user_data.get('uid'), object) and hasattr(user_data.get('uid'), 'value') else user_data.get('uid')
+        
         token = Token(
-            sub= await self.user_service.get_user(client_credentials.username),
+            sub=uid,
             aud="ldap.com",
             iss="auth_server",
             exp=int((now + settings.token_expiration_timedelta).timestamp()),
