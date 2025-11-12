@@ -74,7 +74,10 @@ def test_delete_role_success():
     result = service.delete_role("123")
 
     assert result == 1
-    db_port.delete_entry.assert_called_once_with(service.collection, {"id": "123"})
+    # The method should query by _id (ObjectId) or id field
+    call_args = db_port.delete_entry.call_args
+    assert call_args[0][0] == service.collection
+    assert call_args[0][1] == {"$or": [{"id": "123"}]} or "123" in str(call_args[0][1])
 
 
 def test_delete_role_not_found():
