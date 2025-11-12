@@ -40,13 +40,13 @@ class RoleService:
         roles: list[Role] = []
         for role in roles_cursor:
             # Normalize DB document to Role fields
+            logger.debug("Processing role from DB", role=role)
             role_data = {
                 "id": str(role.get("_id")) if role.get("_id") is not None else role.get("id"),
                 "name": role.get("name"),
                 "description": role.get("description", ""),
                 "created_at": role.get("created_at", "2024-01-01T00:00:00Z"),
                 "updated_at": role.get("updated_at", "2024-01-01T00:00:00Z"),
-                # DB used 'organization_unit' in some places — accept that as fallback
                 "organization": role.get("organization") or role.get("organization_unit") or role.get("organizationUnit")
             }
             roles.append(Role(**role_data))
@@ -140,7 +140,17 @@ class RoleService:
     
     def delete_role(self, role_id: str) -> int:
         logger.info("Received request to delete role", role_id=role_id)
-        deleted_count = self.non_relational_db_port.delete_entry(self.collection, {"id": role_id})
+        # Build query to match both id field and _id field (handles different storage formats)
+        query = {"$or": [{"id": role_id}]}
+        
+        if ObjectId:
+            try:
+                query = {"$or": [{"id": role_id}, {"_id": ObjectId(role_id)}]}
+            except Exception:
+                # If conversion fails, use id field as fallback
+                query = {"id": role_id}
+        
+        deleted_count = self.non_relational_db_port.delete_entry(self.collection, query)
         if deleted_count == 0:
             raise RoleNotFoundError(f"Role with id '{role_id}' not found.")
         return deleted_count

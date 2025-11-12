@@ -20,8 +20,8 @@ from app.config.mongo_settings import connect_db
 
 logger = structlog.get_logger()
 
-role_service = RoleService(NonRelationalDBPort(non_relational_db=connect_db(), db_name="ldap-roles"), collection_name=settings.ROLES_COLLECTION_NAME)
-user_role_service = UserRoleService(NonRelationalDBPort(non_relational_db=connect_db(), db_name="ldap-roles"), collection_name=settings.USER_ROLES_COLLECTION_NAME)
+role_service = RoleService(NonRelationalDBPort(non_relational_db=connect_db(), db_name=settings.MONGO_DB_NAME), collection_name=settings.ROLES_COLLECTION_NAME)
+user_role_service = UserRoleService(NonRelationalDBPort(non_relational_db=connect_db(), db_name=settings.MONGO_DB_NAME), collection_name=settings.USER_ROLES_COLLECTION_NAME)
 
 class UserService:
     def __init__(self, ldap_port: LDAPPort):
