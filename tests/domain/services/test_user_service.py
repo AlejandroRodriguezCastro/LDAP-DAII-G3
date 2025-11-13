@@ -81,10 +81,11 @@ async def test_create_user_failure(patch_role_service, valid_user):
 
 
 @pytest.mark.asyncio
-async def test_delete_user_success(valid_user):
+async def test_delete_user_success(valid_user, patch_role_service):
     ldap_port = AsyncMock()
-    ldap_port.get_user_by_attribute.return_value = {"uid": "alice"}
+    ldap_port.get_user_by_attribute.return_value = {"uid": "alice", "ou": "UADE"}
     ldap_port.delete_user.return_value = True
+    ldap_port.prune_login_records.return_value = None
     service = UserService(ldap_port)
 
     await service.delete_user(valid_user.mail)
@@ -103,10 +104,11 @@ async def test_delete_user_not_found(valid_user):
 
 
 @pytest.mark.asyncio
-async def test_delete_user_failure(valid_user):
+async def test_delete_user_failure(valid_user, patch_role_service):
     ldap_port = AsyncMock()
-    ldap_port.get_user_by_attribute.return_value = {"uid": "alice"}
+    ldap_port.get_user_by_attribute.return_value = {"uid": "alice", "ou": "UADE"}
     ldap_port.delete_user.return_value = False
+    ldap_port.prune_login_records.return_value = None
     service = UserService(ldap_port)
 
     with pytest.raises(FailureUserDeletionError):
@@ -422,11 +424,12 @@ async def test_modify_user_password_failure(valid_user):
 
 
 @pytest.mark.asyncio
-async def test_delete_user_with_list_response(valid_user):
+async def test_delete_user_with_list_response(valid_user, patch_role_service):
     """Test delete_user when get_user_by_attribute returns a list"""
     ldap_port = AsyncMock()
-    ldap_port.get_user_by_attribute.return_value = [{"uid": "alice"}]
+    ldap_port.get_user_by_attribute.return_value = [{"uid": "alice", "ou": "UADE"}]
     ldap_port.delete_user.return_value = True
+    ldap_port.prune_login_records.return_value = None
     service = UserService(ldap_port)
 
     await service.delete_user(valid_user.mail)
