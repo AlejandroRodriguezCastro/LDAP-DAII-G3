@@ -241,27 +241,45 @@ class UserService:
 
     async def delete_user(self, user_mail: str):
         logger.info("Deleting user from LDAP:", user_mail=user_mail)
-        check_email = await self.ldap_port.get_user_by_attribute("mail", f"{user_mail}")
-        logger.info("Mail existence check result:", exists=check_email, mail=user_mail)
+        user_data = await self.ldap_port.get_user_by_attribute("mail", f"{user_mail}")
+        logger.info("Mail existence check result:", exists=user_data, mail=user_mail)
         
         # Normalize shapes: LDAPPort may return a list or a single entry
-        check_email = self._ensure_single_entry(check_email)
-        
-        if not check_email:
+        user_data = self._ensure_single_entry(user_data)
+        if not user_data:
             logger.info("Email does not exist. User not found for deletion.")
             raise UserNotFoundError(user_mail)
-        deleted = await self.ldap_port.delete_user(user_mail)
         
+        user_dn = self._get_user_dn(user_data)
+        await self.ldap_port.prune_login_records(user_dn, keep_last=0)
+        deleted = await self.ldap_port.delete_user(user_mail)
+        logger.debug("User deletion result from LDAP:", deleted=deleted, mail=user_mail)
         if not deleted:
             logger.error("Failed to delete user in LDAP:", mail=user_mail)
             raise FailureUserDeletionError("Failed to delete user in LDAP.")
         logger.info("User deleted from LDAP successfully:", mail=user_mail)
-        
-        # Extract uid from check_email, handling both string and object values
-        uid_value = check_email['uid'].value if hasattr(check_email['uid'], 'value') else check_email['uid']
+
+        # Extract uid from user_data, handling both string and object values
+        uid_value = user_data['uid'].value if hasattr(user_data['uid'], 'value') else user_data['uid']
         logger.info("Deleting user roles associated with user:", username=uid_value)
         user_role_service.delete_user_roles_by_username(uid_value)
 
+    def _get_user_dn(self, user_data) -> str:
+        # Handle both LDAP objects (with .value attribute) and plain dicts (with string values)
+        if not user_data:
+            raise InvalidUserDataError("User data is None or empty.")
+        
+        uid = user_data['uid'].value if 'uid' in user_data and hasattr(user_data['uid'], 'value') else user_data.get('uid')
+        ou = user_data['ou'].value if 'ou' in user_data and hasattr(user_data['ou'], 'value') else user_data.get('ou')
+
+        if not uid or not ou:
+            logger.info("User data missing uid or ou for DN construction", user_data=user_data)
+            raise InvalidUserDataError("User record missing uid or ou.")
+        
+        user_dn = f"uid={uid},ou={ou},dc=ldap,dc=com"
+        logger.info("Constructed user DN", user_dn=user_dn)
+        return user_dn
+    
     async def authenticate_user(self, user_dn: str, password: str, client_ip: str = None) -> bool:
         logger.info("Searching user by mail for authentication", mail=user_dn)
         user_data = await self.ldap_port.get_user_by_attribute("mail", user_dn)
@@ -271,15 +289,7 @@ class UserService:
             logger.info("User not found for mail", mail=user_dn)
             raise UserNotFoundError(user_dn)
         logger.info("User data found for mail", mail=user_dn, user_data=user_data)
-        uid = user_data['uid'].value if 'uid' in user_data and user_data['uid'].value else None
-        ou = user_data['ou'].value if 'ou' in user_data and user_data['ou'].value else None
-
-        if not uid or not ou:
-            logger.info("User found but missing uid or ou", user=user_data)
-            raise InvalidUserDataError("User record missing uid or ou.")
-        
-        user_dn = f"uid={uid},ou={ou},dc=ldap,dc=com"
-        logger.info("Constructed user_dn for authentication", user_dn=user_dn)
+        user_dn = self._get_user_dn(user_data)
 
         is_authenticated = await self.ldap_port.authenticate(user_dn, password)
         logger.info("Authentication result:", user_dn=user_dn, is_authenticated=is_authenticated)

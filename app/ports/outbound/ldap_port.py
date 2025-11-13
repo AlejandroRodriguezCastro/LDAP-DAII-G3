@@ -97,13 +97,17 @@ class LDAPPort:
         search_filter = f"(mail={user_mail})"
         result = self.ldap_controller.search(base_dn, search_filter, scope="SUBTREE")
         # Normalize controller return shapes (tuple, list, or list containing inner list)
+        logger.debug("Search result for user deletion:", result=result)
+        logger.debug("Type of result:", type=type(result))
         if isinstance(result, tuple):
             result = result[0]
-
+        logger.debug("Processed result after tuple check:", result=result)
+        logger.debug("Type of processed result:", type=type(result))
         # If controller returns a list whose first element is an inner list (e.g. [[entry]]), unwrap it
         if isinstance(result, list) and result and isinstance(result[0], list):
             result = result[0]
-
+        logger.debug("Final result for deletion processing:", result=result)
+        logger.debug("Type of final result for deletion processing:", type=type(result))
         if isinstance(result, list) and result:
             # Expect entries to be objects with attribute `entry_dn` (as in LDAP entry mocks)
             entry = result[0]
