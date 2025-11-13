@@ -27,7 +27,7 @@ async def read_organization_units(request: Request):
 async def delete_organization_units(request: Request):
     logger.info("DELETE /organization_units called")
     # only admins can delete all
-    await _require_roles(request, settings.SUPER_ADMIN_ROLES[1])
+    await _require_roles(request, [settings.SUPER_ADMIN_ROLES[1]])
     ldap_port_instance = await get_ldap_port_instance()
     org_unit_service = OrganizationUnitService(ldap_port_instance)
     await org_unit_service.delete_organization_all()
@@ -36,7 +36,7 @@ async def delete_organization_units(request: Request):
 @router.delete("/{org_unit_name}")
 async def delete_organization_unit(org_unit_name: str, request: Request):
     logger.info(f"DELETE /organization_units/{org_unit_name} called")
-    await _require_roles(request, settings.SUPER_ADMIN_ROLES[1])
+    await _require_roles(request, [settings.SUPER_ADMIN_ROLES[1]])
     ldap_port_instance = await get_ldap_port_instance()
     org_unit_service = OrganizationUnitService(ldap_port_instance)
     await org_unit_service.delete_organization(org_unit_name)
@@ -45,7 +45,7 @@ async def delete_organization_unit(org_unit_name: str, request: Request):
 @router.post("/")
 async def create_organization_unit(org_unit: OrganizationUnit, request: Request):
     logger.info("POST /organization_units called")
-    await _require_roles(request, settings.SUPER_ADMIN_ROLES[1])
+    await _require_roles(request, [settings.SUPER_ADMIN_ROLES[1]])
     ldap_port_instance = await get_ldap_port_instance()
     org_unit_service = OrganizationUnitService(ldap_port_instance)
     await org_unit_service.create_organization(org_unit)

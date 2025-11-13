@@ -26,6 +26,7 @@ def _decode_roles_from_jwt(token_str: str) -> list:
         logger.debug("Decoding JWT to extract roles claim")
         payload = tv.decode_jwt()
         logger.debug("Token validation successful", token_sub=payload.get("sub"))
+        logger.debug("Extracted roles from JWT", roles=payload.get("roles"))
         roles = payload.get("roles", [])
         return roles or []
     except Exception as e:
@@ -36,6 +37,8 @@ def _decode_roles_from_jwt(token_str: str) -> list:
 async def _require_roles(request: Request, allowed_roles: list):
     token_str = _extract_token_from_auth_header(request)
     roles = _decode_roles_from_jwt(token_str)
+    logger.debug("Checking if user roles intersect with allowed roles", user_roles=roles, allowed_roles=allowed_roles)
+    logger.debug("Type of roles and allowed_roles", roles_type=type(roles), allowed_roles_type=type(allowed_roles))
     if not any(r in roles for r in allowed_roles):
         logger.warning("Forbidden: insufficient roles")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: insufficient roles")
