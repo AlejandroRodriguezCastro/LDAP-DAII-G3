@@ -22,7 +22,7 @@ async def get_user(request: Request,user_id: str | None = Query(default=None), u
             detail="Either user_id, username or user_mail query parameter is required"
         )
     logger.info("Received request to get user", user_id=user_id, username=username, user_mail=user_mail)
-    await _require_roles(request, [settings.ADMIN_ROLES[0]])
+    await _require_roles(request, [settings.ADMIN_ROLES[0], settings.SUPER_ADMIN_ROLES[0]])
     ldap_port_instance = await get_ldap_port_instance()
     logger.info("Using LDAPPort singleton instance:", instance=ldap_port_instance)
     user_service = UserService(ldap_port_instance)
@@ -108,7 +108,7 @@ async def get_user(request: Request,user_id: str | None = Query(default=None), u
 @router.post("/", response_model=User, status_code=status.HTTP_201_CREATED)
 async def create_user(user: User, request: Request):
     logger.info("Received request to create user:", user=user)
-    await _require_roles(request, [settings.ADMIN_ROLES[1]])
+    await _require_roles(request, [settings.ADMIN_ROLES[1], settings.SUPER_ADMIN_ROLES[1]])
     ldap_port_instance = await get_ldap_port_instance()
     user_service = UserService(ldap_port_instance)
     created_user = await user_service.create_user(user)
@@ -117,7 +117,7 @@ async def create_user(user: User, request: Request):
 @router.delete("/{user_mail}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(user_mail: str, request: Request):
     logger.info("Received request to delete user:", user_mail=user_mail)
-    await _require_roles(request, [settings.ADMIN_ROLES[1]])
+    await _require_roles(request, [settings.ADMIN_ROLES[1], settings.SUPER_ADMIN_ROLES[1]])
     ldap_port_instance = await get_ldap_port_instance()
     user_service = UserService(ldap_port_instance)
     await user_service.delete_user(user_mail)
@@ -125,7 +125,7 @@ async def delete_user(user_mail: str, request: Request):
 @router.get("/by-organization/{org_unit_name}", response_model=list[User])
 async def get_users_by_organization(org_unit_name: str, request: Request):
     logger.info("Received request to fetch users by organization:", org_unit_name=org_unit_name)
-    await _require_roles(request, [settings.ADMIN_ROLES[0]])
+    await _require_roles(request, [settings.ADMIN_ROLES[0], settings.SUPER_ADMIN_ROLES[0]])
     ldap_port_instance = await get_ldap_port_instance()
     user_service = UserService(ldap_port_instance)
     users = await user_service.get_users_by_organization(org_unit_name)
@@ -134,7 +134,7 @@ async def get_users_by_organization(org_unit_name: str, request: Request):
 @router.put("/{user_mail}", response_model=User)
 async def update_user(user_mail: str, user: User, request: Request):
     logger.info("Received request to update user:", user_mail=user_mail, user=user)
-    await _require_roles(request, [settings.ADMIN_ROLES[1]])
+    await _require_roles(request, [settings.ADMIN_ROLES[1], settings.SUPER_ADMIN_ROLES[1]])
     ldap_port_instance = await get_ldap_port_instance()
     user_service = UserService(ldap_port_instance)
     updated_user = await user_service.modify_user_data(user_mail, user)
@@ -143,7 +143,7 @@ async def update_user(user_mail: str, user: User, request: Request):
 @router.get("/all", response_model=list[User])
 async def get_all_users(request: Request):
     logger.info("Received request to fetch all users")
-    await _require_roles(request, [settings.ADMIN_ROLES[0]])
+    await _require_roles(request, [settings.ADMIN_ROLES[0], settings.SUPER_ADMIN_ROLES[0]])
     ldap_port_instance = await get_ldap_port_instance()
     user_service = UserService(ldap_port_instance)
     users = await user_service.get_all_users()
@@ -152,7 +152,7 @@ async def get_all_users(request: Request):
 @router.post("/change-password", status_code=status.HTTP_200_OK)
 async def change_password(request: Request, user_mail: str = Query(...), new_password: str = Query(...)):
     logger.info("Received request to change password", user_mail=user_mail)
-    await _require_roles(request, [settings.ADMIN_ROLES[1]])
+    await _require_roles(request, [settings.ADMIN_ROLES[1], settings.SUPER_ADMIN_ROLES[1]])
     ldap_port_instance = await get_ldap_port_instance()
     user_service = UserService(ldap_port_instance)
     success = await user_service.change_password(user_mail, new_password)
