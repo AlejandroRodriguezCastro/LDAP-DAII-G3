@@ -380,24 +380,29 @@ class UserService:
 
         return new_data
     
-    async def modify_user_password(self, user_mail: str, new_password: str):
+    async def change_password(self, user_mail: str, old_password: str, new_password: str):
         logger.info("Modifying user password in LDAP:", mail=user_mail)
-        user_dn = await self.ldap_port.get_user_by_attribute("mail", f"{user_mail}")
+        user_data = await self.ldap_port.get_user_by_attribute("mail", f"{user_mail}")
         # Normalise shapes: LDAPPort may return a list or a single entry
-        user_dn = self._ensure_single_entry(user_dn)
+        user_dn = self._ensure_single_entry(user_data)
         logger.info("Mail existence check result:", exists=user_dn, mail=user_mail)
+        user_dn = self._get_user_dn(user_dn)
+        is_authenticated = await self.ldap_port.authenticate(user_dn, old_password)
+        logger.info("Old password authentication result:", is_authenticated=is_authenticated)
+        if not is_authenticated:
+            logger.info("Old password is incorrect. Cannot modify password.", mail=user_mail)
+            raise UserInvalidCredentialsError("Old password is incorrect.")
         
         if not user_dn:
             logger.info("Email does not exist. User not found for password modification.")
             raise UserNotFoundError(user_mail)
-
-        user_exists = user_dn['uid'].value if 'uid' in user_dn else None
-        logger.info("User DN fetched for password modification:", user_dn=user_exists)
-        if not user_exists:
+        
+        logger.info("User DN fetched for password modification:", user_dn=user_dn)
+        if not user_dn:
             logger.info("User DN not found in record. Cannot modify password.")
             raise InvalidUserDataError("User DN not found in record.")
         
-        modified = await self.ldap_port.modify_user_password(user_dn, new_password)
+        modified = await self.ldap_port.reset_user_password(user_dn, new_password)
         if not modified:
             logger.error("Failed to modify user password in LDAP:", mail=user_mail)
             raise FailureUserCreationError("Failed to modify user password in LDAP.")
