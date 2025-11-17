@@ -121,6 +121,9 @@ class FakeLDAPPort:
     async def modify_user_password(self, user_dn, new_password):
         return True
 
+    async def reset_user_password(self, user_dn, new_password):
+        return True
+
 
 def run(coro):
     # Use asyncio.run which is compatible with Python 3.7+ and
@@ -255,5 +258,5 @@ def test_modify_user_data_and_password():
     assert res is new
 
     # modify password success
-    ok = run(svc.modify_user_password('frank@example.com', 'newpass'))
+    ok = run(svc.change_password('frank@example.com', 'this_is_good_password', 'newpass123'))
     assert ok is True

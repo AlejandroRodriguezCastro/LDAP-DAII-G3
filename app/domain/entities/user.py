@@ -52,3 +52,24 @@ class User(BaseModel):
         if not re.match(pattern, v.replace(" ", "").replace("-", "")):
             raise ValueError("Invalid telephone number format. Please use E.164 format (+1234567890) or local format (10-15 digits).")
         return v
+
+
+class ChangePasswordRequest(BaseModel):
+    """Request body for password change endpoint"""
+    mail: str
+    old_password: str = Field(..., min_length=12, max_length=128)
+    new_password: str = Field(..., min_length=12, max_length=128)
+
+    @field_validator("old_password", "new_password")
+    @classmethod
+    def password_strength(cls, v):
+        import re
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not re.search(r"[a-z]", v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not re.search(r"\d", v):
+            raise ValueError("Password must contain at least one digit")
+        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", v):
+            raise ValueError("Password must contain at least one special character")
+        return v

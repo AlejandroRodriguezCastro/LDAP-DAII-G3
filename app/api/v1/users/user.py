@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Query, Request
 import structlog
 from app.domain.services.user_service import UserService
-from app.domain.entities.user import User
+from app.domain.entities.user import User, ChangePasswordRequest
 from app.config.ldap_singleton import get_ldap_port_instance
 from app.config.settings import settings
 from app.handlers.authentication.authentication_handler import _require_roles
@@ -150,12 +150,13 @@ async def get_all_users(request: Request):
     return users
 
 @router.post("/change-password", status_code=status.HTTP_200_OK)
-async def change_password(request: Request, user_mail: str = Query(...), new_password: str = Query(...)):
-    logger.info("Received request to change password", user_mail=user_mail)
-    await _require_roles(request, [settings.ADMIN_ROLES[1], settings.SUPER_ADMIN_ROLES[1]])
+async def change_password(request: Request, payload: ChangePasswordRequest):
+    logger.info("Received request to change password", mail=payload.mail)
+    logger.debug("Skipping role requirement for password change endpoint")
+    # await _require_roles(request, [settings.ADMIN_ROLES[1], settings.SUPER_ADMIN_ROLES[1]])
     ldap_port_instance = await get_ldap_port_instance()
     user_service = UserService(ldap_port_instance)
-    success = await user_service.change_password(user_mail, new_password)
+    success = await user_service.change_password(payload.mail, payload.old_password, payload.new_password)
     if success:
         return {"message": "Password changed successfully"}
     raise HTTPException(

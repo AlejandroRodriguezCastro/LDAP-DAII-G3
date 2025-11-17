@@ -233,9 +233,14 @@ class TestUserEndpoints:
         mock_service_class.return_value = mock_service
         mock_service.change_password = AsyncMock(return_value=True)
         
-        from app.api.v1.users.user import change_password
+        from app.api.v1.users.user import change_password, ChangePasswordRequest
         request = MagicMock()
-        result = await change_password(request, "alice@example.com", "NewPassword123!")
+        payload = ChangePasswordRequest(
+            mail="alice@example.com",
+            old_password="OldPassword123!",
+            new_password="NewPassword123!"
+        )
+        result = await change_password(request, payload)
         
         assert "Password changed successfully" in result["message"]
 
@@ -251,10 +256,15 @@ class TestUserEndpoints:
         mock_service_class.return_value = mock_service
         mock_service.change_password = AsyncMock(return_value=False)
         
-        from app.api.v1.users.user import change_password
+        from app.api.v1.users.user import change_password, ChangePasswordRequest
         request = MagicMock()
+        payload = ChangePasswordRequest(
+            mail="alice@example.com",
+            old_password="OldPassword123!",
+            new_password="NewPassword123!"
+        )
         with pytest.raises(HTTPException) as exc_info:
-            await change_password(request, "alice@example.com", "NewPassword123!")
+            await change_password(request, payload)
         
         assert exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
 

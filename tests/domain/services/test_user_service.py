@@ -388,12 +388,14 @@ async def test_modify_user_password_success(valid_user):
     """Test modify_user_password successfully updates password"""
     ldap_port = AsyncMock()
     ldap_port.get_user_by_attribute.return_value = {
-        "uid": AsyncMock(value="alice")
+        "uid": AsyncMock(value="alice"),
+        "ou": AsyncMock(value="UADE")
     }
-    ldap_port.modify_user_password.return_value = True
+    ldap_port.authenticate.return_value = True
+    ldap_port.reset_user_password.return_value = True
     service = UserService(ldap_port)
 
-    result = await service.modify_user_password(valid_user.mail, "newpass123")
+    result = await service.change_password(valid_user.mail, "oldpass123", "newpass123")
 
     assert result is True
 
@@ -405,8 +407,8 @@ async def test_modify_user_password_user_not_found(valid_user):
     ldap_port.get_user_by_attribute.return_value = None
     service = UserService(ldap_port)
 
-    with pytest.raises(UserNotFoundError):
-        await service.modify_user_password(valid_user.mail, "newpass123")
+    with pytest.raises(InvalidUserDataError):
+        await service.change_password(valid_user.mail, "oldpass123", "newpass123")
 
 
 @pytest.mark.asyncio
@@ -414,13 +416,15 @@ async def test_modify_user_password_failure(valid_user):
     """Test modify_user_password when modification fails"""
     ldap_port = AsyncMock()
     ldap_port.get_user_by_attribute.return_value = {
-        "uid": AsyncMock(value="alice")
+        "uid": AsyncMock(value="alice"),
+        "ou": AsyncMock(value="UADE")
     }
-    ldap_port.modify_user_password.return_value = False
+    ldap_port.authenticate.return_value = True
+    ldap_port.reset_user_password.return_value = False
     service = UserService(ldap_port)
 
     with pytest.raises(FailureUserCreationError):
-        await service.modify_user_password(valid_user.mail, "newpass123")
+        await service.change_password(valid_user.mail, "oldpass123", "newpass123")
 
 
 @pytest.mark.asyncio
