@@ -409,6 +409,48 @@ class UserService:
 
         return True
     
+    async def reset_password(self, user_mail: str, new_password: str):
+        """Reset user password without requiring old password (for password recovery)
+        
+        Args:
+            user_mail: Email address of the user
+            new_password: The new password
+            
+        Returns:
+            bool: True if password reset successfully
+            
+        Raises:
+            UserNotFoundError: If user not found
+            FailureUserModificationError: If password reset fails
+        """
+        logger.info("Resetting user password via recovery", mail=user_mail)
+        
+        try:
+            user_data = await self.ldap_port.get_user_by_attribute("mail", user_mail)
+            user_dn = self._ensure_single_entry(user_data)
+            
+            if not user_dn:
+                logger.warning("User not found for password reset", mail=user_mail)
+                raise UserNotFoundError(f"User with email '{user_mail}' not found")
+            
+            user_dn = self._get_user_dn(user_dn)
+            logger.info("User DN fetched for password reset", user_dn=user_dn)
+            
+            modified = await self.ldap_port.reset_user_password(user_dn, new_password)
+            
+            if not modified:
+                logger.error("Failed to reset user password in LDAP", mail=user_mail)
+                raise FailureUserModificationError("Failed to reset password")
+            
+            logger.info("Password reset successfully via recovery", mail=user_mail)
+            return True
+            
+        except (UserNotFoundError, FailureUserModificationError):
+            raise
+        except Exception as e:
+            logger.error("Error resetting password", mail=user_mail, error=str(e))
+            raise FailureUserModificationError("An error occurred while resetting password")
+    
     async def get_users_by_organization(self, org_unit_name: str) -> list[User]:
         """Fetch all users belonging to a specific organization unit.
         
