@@ -196,7 +196,7 @@ class EmailPort:
                     
                     <div class="footer">
                         <p style="margin: 0;">
-                            © 2024 Sistema LDAP-DAII-G3. Todos los derechos reservados.
+                            © 2025 Sistema LDAP-DAII-G3. Todos los derechos reservados.
                         </p>
                         <p style="margin: 8px 0 0 0;">
                             ¿Necesitas ayuda? <a href="#">Contactar Soporte</a>
@@ -421,7 +421,7 @@ AVISO DE SEGURIDAD IMPORTANTE
                     
                     <div class="footer">
                         <p style="margin: 0;">
-                            © 2024 Sistema LDAP-DAII-G3. Todos los derechos reservados.
+                            © 2025 Sistema LDAP-DAII-G3. Todos los derechos reservados.
                         </p>
                         <p style="margin: 8px 0 0 0;">
                             ¿Preguntas? <a href="#">Contactar Soporte</a>
