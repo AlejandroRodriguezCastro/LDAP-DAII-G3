@@ -1,10 +1,14 @@
 from fastapi import APIRouter, HTTPException, status, Query, Request
 import structlog
 from app.domain.services.user_service import UserService
+from app.domain.services.password_recovery_service import PasswordRecoveryService
 from app.domain.entities.user import User, ChangePasswordRequest
+from app.domain.entities.password_recovery import PasswordRecoveryRequest, PasswordResetRequest
 from app.config.ldap_singleton import get_ldap_port_instance
 from app.config.settings import settings
 from app.handlers.authentication.authentication_handler import _require_roles
+from app.ports.outbound.nonrelationaldb_port import NonRelationalDBPort
+from app.config.mongo_settings import connect_db
 
 logger = structlog.get_logger()
 
@@ -163,3 +167,73 @@ async def change_password(request: Request, payload: ChangePasswordRequest):
         status_code=status.HTTP_400_BAD_REQUEST,
         detail="Failed to change password"
     )
+
+
+@router.post("/request-password-recovery", status_code=status.HTTP_200_OK)
+async def request_password_recovery(payload: PasswordRecoveryRequest):
+    """Request a password recovery email
+    
+    This endpoint generates a password recovery token and sends it to the provided email.
+    Note: For security reasons, this endpoint returns success whether the email exists or not.
+    """
+    logger.info("Received password recovery request", email=payload.mail)
+    
+    db_port = NonRelationalDBPort(non_relational_db=connect_db(), db_name=settings.MONGO_DB_NAME)
+    recovery_service = PasswordRecoveryService(db_port)
+    
+    # Check if user exists (for our purposes, we'll try to process regardless)
+    ldap_port_instance = await get_ldap_port_instance()
+    user_service = UserService(ldap_port_instance)
+    
+    user_exists = True
+    try:
+        user = await user_service.get_user(user_mail=payload.mail)
+        logger.debug("User lookup result during recovery request", email=payload.mail, user=user)
+        user_exists = user is not None
+    except Exception as e:
+        logger.debug("User not found during recovery request", email=payload.mail, error=str(e))
+        user_exists = False
+    
+    # Request recovery - exceptions will be handled by top-level exception handlers
+    if user_exists:
+        logger.info("User exists for password recovery request", email=payload.mail)
+        await recovery_service.request_password_recovery(payload.mail, user_exists)
+    
+    # Always return the same message for security reasons (don't reveal if user exists)
+    return {"message": "If an account with this email exists, a password recovery email has been sent."}
+
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
+async def reset_password(payload: PasswordResetRequest):
+    """Reset password using a recovery token
+    
+    This endpoint validates the recovery token and resets the user's password.
+    """
+    logger.info("Received password reset request")
+    
+    db_port = NonRelationalDBPort(non_relational_db=connect_db(), db_name=settings.MONGO_DB_NAME)
+    recovery_service = PasswordRecoveryService(db_port)
+    
+    # Validate the recovery token - exceptions will be handled by top-level exception handlers
+    user_email = await recovery_service.validate_recovery_token(payload.token)
+    logger.info("Recovery token validated for email", email=user_email)
+    
+    # Get the user and reset password
+    ldap_port_instance = await get_ldap_port_instance()
+    user_service = UserService(ldap_port_instance)
+    
+    # Reset the password in LDAP
+    await user_service.reset_password(user_email, payload.new_password)
+    
+    # Mark token as used
+    await recovery_service.mark_token_as_used(payload.token)
+    
+    # Send confirmation email
+    try:
+        await recovery_service.email_service.send_password_changed_notification(user_email)
+    except Exception as e:
+        logger.warning("Failed to send password changed notification", email=user_email, error=str(e))
+        # Don't fail the whole operation if notification email fails
+    
+    logger.info("Password reset successfully", email=user_email)
+    return {"message": "Password has been reset successfully. Please log in with your new password."}

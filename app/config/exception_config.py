@@ -51,6 +51,17 @@ from app.handlers.errors.organization_exception_handler import (
     FailureOrganizationDeletionError
 )
 
+from app.handlers.errors.password_recovery_exception_handler import (
+    password_recovery_token_not_found_handler,
+    password_recovery_token_expired_handler,
+    password_recovery_token_already_used_handler,
+    password_recovery_email_failed_handler,
+    PasswordRecoveryTokenNotFoundError,
+    PasswordRecoveryTokenExpiredError,
+    PasswordRecoveryTokenAlreadyUsedError,
+    PasswordRecoveryEmailFailedError
+)
+
 logger = structlog.get_logger()
 
 def register_exception_handlers(app: FastAPI):
@@ -80,4 +91,10 @@ def register_exception_handlers(app: FastAPI):
     app.add_exception_handler(UnauthorizedOrganizationError, unauthorized_organization_exception_handler)
     app.add_exception_handler(FailureOrganizationCreationError, failure_organization_creation_exception_handler)
     app.add_exception_handler(FailureOrganizationDeletionError, failure_organization_deletion_exception_handler)
+    
+    logger.info("Registering password recovery exception handlers with FastAPI app.")
+    app.add_exception_handler(PasswordRecoveryTokenNotFoundError, password_recovery_token_not_found_handler)
+    app.add_exception_handler(PasswordRecoveryTokenExpiredError, password_recovery_token_expired_handler)
+    app.add_exception_handler(PasswordRecoveryTokenAlreadyUsedError, password_recovery_token_already_used_handler)
+    app.add_exception_handler(PasswordRecoveryEmailFailedError, password_recovery_email_failed_handler)
     
