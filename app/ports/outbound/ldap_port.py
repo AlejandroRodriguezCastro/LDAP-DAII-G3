@@ -283,7 +283,7 @@ class LDAPPort:
 
     async def add_login_record(self, user_dn: str, ip: str):
         logger.info("LDAPPort: Adding login record", user_dn=user_dn, ip=ip)
-        now = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%SZ")
+        now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%SZ")
         self.ldap_controller.connect()
         record_dn = f"loginTimestamp={now},{user_dn}"
 
