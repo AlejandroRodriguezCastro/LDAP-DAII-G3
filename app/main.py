@@ -4,6 +4,7 @@ import structlog
 from app.api.v1.routes import all_routers
 from app.config.settings import settings
 from app.config.ldap_singleton import get_ldap_port_instance
+from app.infra.rabbitmq_service_factory import get_rabbitmq_port_instance
 from app.utils.logging import configure_logging
 from app.config.exception_config import register_exception_handlers
 from app.config.mongo_settings import connect_db, disconnect_db
@@ -25,11 +26,26 @@ async def lifespan(app: FastAPI):
     connect_db()
     logger.info("MongoDB connection established.")
     ldap_instance = await get_ldap_port_instance()
+    
+    # Note: RabbitMQ connection is lazy-loaded on first use (not during startup)
+    # This prevents the app from hanging if RabbitMQ is unreachable
+    logger.info("RabbitMQ connection will be initialized on first use")
+    
     yield
     # Cleanup LDAP connection on shutdown
     if hasattr(ldap_instance, "conn") and ldap_instance.conn.bound:
         ldap_instance.conn.unbind()
         logger.info("LDAP connection purged on shutdown.")
+    
+    # Cleanup RabbitMQ connection on shutdown
+    try:
+        from app.config.rabbitmq_singleton import RabbitMQSingleton
+        rabbitmq_singleton = RabbitMQSingleton()
+        await rabbitmq_singleton.disconnect()
+        logger.info("RabbitMQ connection closed on shutdown.")
+    except Exception as e:
+        logger.error("Error closing RabbitMQ connection", error=str(e))
+    
     # Disconnect MongoDB
     disconnect_db()
     logger.info("MongoDB connection closed.")

@@ -7,6 +7,7 @@ from app.domain.entities.client_credentials import ClientCredentials
 from app.domain.services.user_service import UserService
 from app.config.ldap_singleton import get_ldap_port_instance
 from app.domain.services.token_service import TokenService
+from app.handlers.rabbitmq_event_publisher import publish_authentication_event
 
 logger = structlog.get_logger()
 
@@ -22,10 +23,30 @@ async def token(credential: ClientCredentials, request: Request):
     ldap_port_instance = await get_ldap_port_instance()
     user_service = UserService(ldap_port_instance)
     logger.info("Authenticating user:", username=credential.username, client_ip=request.client.host)
-    await user_service.authenticate_user(credential.username, credential.password, client_ip=request.client.host)
-    token_service = TokenService(user_service)
-    token = await token_service.generate_token(credential)
-    return token.to_jwt()
+    
+    try:
+        await user_service.authenticate_user(credential.username, credential.password, client_ip=request.client.host)
+        token_service = TokenService(user_service)
+        token = await token_service.generate_token(credential)
+        
+        # Publish successful login event
+        await publish_authentication_event(
+            status="SUCCESS",
+            username=credential.username,
+            ip_address=request.client.host if request.client else None
+        )
+        
+        return token.to_jwt()
+    
+    except Exception as e:
+        # Publish failed login event
+        await publish_authentication_event(
+            status="FAILURE",
+            username=credential.username,
+            error_reason=str(e),
+            ip_address=request.client.host if request.client else None
+        )
+        raise
     
 @router.post("/validate", status_code=status.HTTP_200_OK)
 async def validate_token(request: TokenValidationRequest):

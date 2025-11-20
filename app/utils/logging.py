@@ -28,6 +28,13 @@ def configure_logging():
     log_level = settings.LOG_LEVEL if hasattr(settings, "LOG_LEVEL") else "INFO"
     numeric_level = getattr(logging, log_level, logging.INFO)
     logging.basicConfig(stream=sys.stdout, level=numeric_level)
+    
+    # Suppress verbose DEBUG logs from aio_pika and aiormq
+    logging.getLogger("aio_pika").setLevel(logging.WARNING)
+    logging.getLogger("aio_pika.robust_connection").setLevel(logging.WARNING)
+    logging.getLogger("aiormq").setLevel(logging.WARNING)
+    logging.getLogger("aiormq.connection").setLevel(logging.WARNING)
+    
     structlog.configure(
         processors=[
             structlog.processors.TimeStamper(fmt="iso"),

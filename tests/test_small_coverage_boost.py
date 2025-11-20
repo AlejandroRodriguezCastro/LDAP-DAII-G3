@@ -113,3 +113,111 @@ def test_auth_routes_with_patched_services(monkeypatch):
     history_resp = asyncio.run(auth_module.get_login_history("user@example.com", limit=2))
     assert isinstance(history_resp, dict)
     assert "login_history" in history_resp
+
+
+def test_rabbitmq_event_publisher_functions(monkeypatch):
+    """Test RabbitMQ event publisher functions."""
+    from app.handlers.rabbitmq_event_publisher import (
+        publish_ldap_event,
+        publish_authentication_event,
+        publish_user_operation_event,
+        publish_organization_operation_event,
+        publish_role_operation_event,
+        publish_error_event
+    )
+
+    # Mock get_rabbitmq_port_instance to avoid actual RabbitMQ calls
+    class FakeRabbitMQPort:
+        async def publish_message(self, message_body):
+            return True
+
+        async def publish_log_message(self, log_level, message, source, **kwargs):
+            return True
+
+        async def publish_audit_log(self, action, user, resource, status, **kwargs):
+            return True
+
+    async def fake_get_rabbitmq():
+        return FakeRabbitMQPort()
+
+    monkeypatch.setattr(
+        "app.handlers.rabbitmq_event_publisher.get_rabbitmq_port_instance",
+        fake_get_rabbitmq,
+        raising=False,
+    )
+
+    # Test publish_ldap_event
+    result = asyncio.run(publish_ldap_event("user.created", {"username": "test"}))
+    assert result is True
+
+    # Test publish_authentication_event success
+    result = asyncio.run(
+        publish_authentication_event("SUCCESS", username="test", user_id="123")
+    )
+    assert result is True
+
+    # Test publish_authentication_event failure
+    result = asyncio.run(
+        publish_authentication_event(
+            "FAILURE", username="test", error_reason="Invalid password"
+        )
+    )
+    assert result is True
+
+    # Test publish_user_operation_event
+    result = asyncio.run(
+        publish_user_operation_event("CREATE", "testuser", "SUCCESS", "admin")
+    )
+    assert result is True
+
+    # Test publish_organization_operation_event
+    result = asyncio.run(
+        publish_organization_operation_event("CREATE", "TestOrg", "SUCCESS", "admin")
+    )
+    assert result is True
+
+    # Test publish_role_operation_event
+    result = asyncio.run(
+        publish_role_operation_event("CREATE", "TestRole", "SUCCESS", "admin")
+    )
+    assert result is True
+
+    # Test publish_error_event
+    result = asyncio.run(
+        publish_error_event("ValidationError", "Invalid input", context={"field": "email"})
+    )
+    assert result is True
+
+
+def test_rabbitmq_port_message_publishing(monkeypatch):
+    """Test RabbitMQPort message publishing methods."""
+    from app.ports.outbound.rabbitmq_port import RabbitMQPort
+
+    class FakeExchange:
+        async def publish(self, message, routing_key):
+            return True
+
+    class FakeSingleton:
+        async def connect(self):
+            pass
+
+        async def get_exchange(self):
+            return FakeExchange()
+
+    port = RabbitMQPort(FakeSingleton())
+
+    # Test publish_message
+    result = asyncio.run(port.publish_message({"key": "value"}))
+    assert result is True
+
+    # Test publish_log_message
+    result = asyncio.run(
+        port.publish_log_message("INFO", "Test message", "TEST_SOURCE")
+    )
+    assert result is True
+
+    # Test publish_audit_log
+    result = asyncio.run(
+        port.publish_audit_log("CREATE_USER", "admin", "user:test", "SUCCESS")
+    )
+    assert result is True
