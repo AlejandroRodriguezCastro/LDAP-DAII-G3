@@ -38,6 +38,16 @@ class Settings(BaseSettings):
     PASSWORD_RECOVERY_TOKEN_EXPIRATION: str = "24h"  # Token expiration time
     PASSWORD_RECOVERY_LINK_TEMPLATE: str = "http://ec2-44-217-132-156.compute-1.amazonaws.com/reset-password?token={token}"  # Frontend recovery link
     
+    # RabbitMQ configuration
+    RABBITMQ_HOST: str
+    RABBITMQ_PORT: int
+    RABBITMQ_USER: str
+    RABBITMQ_PASSWORD: str
+    RABBITMQ_EXCHANGE: str
+    RABBITMQ_ROUTING_KEY: str
+    RABBITMQ_MESSAGE_CONTENT_TYPE: str = "application/json"
+    RABBITMQ_DELIVERY_MODE: int = 2  # 2 = persistent
+    
     model_config = SettingsConfigDict(env_file=os.path.join(os.path.dirname(__file__), ".env"), extra="ignore")
 
     @property
